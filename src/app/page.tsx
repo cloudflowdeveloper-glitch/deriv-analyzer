@@ -40,12 +40,11 @@ const MARKET_TABS: Array<{ value: MarketType | 'chart' | 'dashboard' | 'accumula
   { value: 'dashboard', label: 'Overview', icon: <Monitor className="h-4 w-4" /> },
 ]
 
-// Top crypto symbols to show in live price strip
+// Top Deriv symbols to show in live price strip
 const LIVE_STRIP_SYMBOLS = [
-  'BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT',
-  'BINANCE:BNBUSDT', 'BINANCE:XRPUSDT', 'BINANCE:DOGEUSDT',
-  'BINANCE:ADAUSDT', 'BINANCE:AVAXUSDT', 'BINANCE:DOTUSDT',
-  'BINANCE:LINKUSDT',
+  'R_100', 'R_75', 'R_50', 'R_25', 'R_10',
+  '1HZ10V', '1HZ100V', 'CRASH300N', 'BOOM300N',
+  'frxEURUSD', 'frxGBPUSD', 'frxXAUUSD',
 ]
 
 function LivePriceStrip() {
@@ -295,7 +294,7 @@ export default function TradingAnalysisPage() {
       <footer className="border-t border-border/50 bg-background mt-auto">
         <div className="px-3 sm:px-4 py-2">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[9px] text-muted-foreground">
-            <p>Deriv Analyzer • {ALL_SYMBOLS.length} markets • Live Binance data • Tick-by-tick analysis</p>
+            <p>Deriv Analyzer • {ALL_SYMBOLS.length} markets • Deriv tick-by-tick analysis</p>
             <p>⚠ For educational purposes only. Not financial advice.</p>
           </div>
         </div>

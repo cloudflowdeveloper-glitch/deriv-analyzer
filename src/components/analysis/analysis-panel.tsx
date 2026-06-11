@@ -324,7 +324,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                 <p className="text-[10px] text-muted-foreground">Entry Price</p>
                 <p className="text-lg font-bold font-mono tracking-tight">{displayPrice.toFixed(2)}</p>
                 {livePrice && (
-                  <p className="text-[8px] text-emerald-400">● Live from Binance</p>
+                  <p className="text-[8px] text-emerald-400">● Live from Deriv</p>
                 )}
               </div>
               <div className="text-center">

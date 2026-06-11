@@ -4,6 +4,8 @@ import { URL } from 'url'
 import WebSocket from 'ws'
 
 const PORT = 3004
+const DERIV_APP_ID = 1089
+const DERIV_WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface Tick {
@@ -17,7 +19,8 @@ interface SymbolData {
   tvSymbol: string
   name: string
   category: string
-  source: 'binance' | 'poll'
+  source: 'deriv'
+  pipSize: number
   ticks: Tick[]
   currentPrice: number
   prevPrice: number
@@ -41,6 +44,8 @@ interface SymbolData {
 interface DigitAnalysis {
   symbol: string
   tvSymbol: string
+  name: string
+  category: string
   currentPrice: number
   lastDigit: number
   digitCounts: number[]
@@ -62,74 +67,55 @@ interface DigitAnalysis {
   tickSpeed: number
   recentTicks: Array<{ price: number; timestamp: number; lastDigit: number }>
   totalTicks: number
+  pipSize: number
 }
 
-// ─── Symbol Mapping ──────────────────────────────────────────────────
-const CRYPTO_SYMBOLS: Array<{ tv: string; binance: string; name: string }> = [
-  { tv: 'BINANCE:BTCUSDT', binance: 'btcusdt', name: 'BTC/USDT' },
-  { tv: 'BINANCE:ETHUSDT', binance: 'ethusdt', name: 'ETH/USDT' },
-  { tv: 'BINANCE:SOLUSDT', binance: 'solusdt', name: 'SOL/USDT' },
-  { tv: 'BINANCE:BNBUSDT', binance: 'bnbusdt', name: 'BNB/USDT' },
-  { tv: 'BINANCE:XRPUSDT', binance: 'xrpusdt', name: 'XRP/USDT' },
-  { tv: 'BINANCE:ADAUSDT', binance: 'adausdt', name: 'ADA/USDT' },
-  { tv: 'BINANCE:DOGEUSDT', binance: 'dogeusdt', name: 'DOGE/USDT' },
-  { tv: 'BINANCE:AVAXUSDT', binance: 'avaxusdt', name: 'AVAX/USDT' },
-  { tv: 'BINANCE:DOTUSDT', binance: 'dotusdt', name: 'DOT/USDT' },
-  { tv: 'BINANCE:MATICUSDT', binance: 'maticusdt', name: 'MATIC/USDT' },
-  { tv: 'BINANCE:LINKUSDT', binance: 'linkusdt', name: 'LINK/USDT' },
-  { tv: 'BINANCE:SHIBUSDT', binance: 'shibusdt', name: 'SHIB/USDT' },
-  { tv: 'BINANCE:ATOMUSDT', binance: 'atomusdt', name: 'ATOM/USDT' },
-  { tv: 'BINANCE:UNIUSDT', binance: 'uniusdt', name: 'UNI/USDT' },
-  { tv: 'BINANCE:NEARUSDT', binance: 'nearusdt', name: 'NEAR/USDT' },
-]
-
-const FOREX_SYMBOLS: Array<{ tv: string; name: string; basePrice: number; volatility: number }> = [
-  { tv: 'FX:EURUSD', name: 'EUR/USD', basePrice: 1.0850, volatility: 0.0003 },
-  { tv: 'FX:GBPUSD', name: 'GBP/USD', basePrice: 1.2650, volatility: 0.0004 },
-  { tv: 'FX:USDJPY', name: 'USD/JPY', basePrice: 149.50, volatility: 0.05 },
-  { tv: 'FX:USDCHF', name: 'USD/CHF', basePrice: 0.8780, volatility: 0.0003 },
-  { tv: 'FX:AUDUSD', name: 'AUD/USD', basePrice: 0.6550, volatility: 0.0003 },
-  { tv: 'FX:NZDUSD', name: 'NZD/USD', basePrice: 0.6100, volatility: 0.0003 },
-  { tv: 'FX:USDCAD', name: 'USD/CAD', basePrice: 1.3550, volatility: 0.0003 },
-  { tv: 'FX:EURGBP', name: 'EUR/GBP', basePrice: 0.8580, volatility: 0.0002 },
-  { tv: 'FX:EURJPY', name: 'EUR/JPY', basePrice: 162.20, volatility: 0.05 },
-  { tv: 'FX:GBPJPY', name: 'GBP/JPY', basePrice: 189.10, volatility: 0.06 },
-  { tv: 'FX:XAUUSD', name: 'Gold', basePrice: 2340.50, volatility: 1.5 },
-  { tv: 'FX:XAGUSD', name: 'Silver', basePrice: 29.15, volatility: 0.08 },
-  { tv: 'FX:USOIL', name: 'Oil', basePrice: 78.50, volatility: 0.15 },
-]
-
-const STOCK_SYMBOLS: Array<{ tv: string; yahoo: string; name: string; basePrice: number; volatility: number }> = [
-  { tv: 'NASDAQ:AAPL', yahoo: 'AAPL', name: 'Apple', basePrice: 195.50, volatility: 0.3 },
-  { tv: 'NASDAQ:MSFT', yahoo: 'MSFT', name: 'Microsoft', basePrice: 420.80, volatility: 0.5 },
-  { tv: 'NASDAQ:GOOGL', yahoo: 'GOOGL', name: 'Alphabet', basePrice: 175.20, volatility: 0.4 },
-  { tv: 'NASDAQ:AMZN', yahoo: 'AMZN', name: 'Amazon', basePrice: 185.60, volatility: 0.5 },
-  { tv: 'NASDAQ:TSLA', yahoo: 'TSLA', name: 'Tesla', basePrice: 248.30, volatility: 1.0 },
-  { tv: 'NASDAQ:META', yahoo: 'META', name: 'Meta', basePrice: 505.20, volatility: 0.8 },
-  { tv: 'NASDAQ:NVDA', yahoo: 'NVDA', name: 'NVIDIA', basePrice: 880.40, volatility: 2.0 },
-  { tv: 'NASDAQ:NFLX', yahoo: 'NFLX', name: 'Netflix', basePrice: 628.50, volatility: 1.0 },
-  { tv: 'NASDAQ:AMD', yahoo: 'AMD', name: 'AMD', basePrice: 165.30, volatility: 0.5 },
-  { tv: 'NASDAQ:INTC', yahoo: 'INTC', name: 'Intel', basePrice: 31.20, volatility: 0.2 },
-  { tv: 'NASDAQ:PYPL', yahoo: 'PYPL', name: 'PayPal', basePrice: 64.80, volatility: 0.3 },
-  { tv: 'NASDAQ:CRM', yahoo: 'CRM', name: 'Salesforce', basePrice: 262.40, volatility: 0.5 },
-  { tv: 'NASDAQ:ORCL', yahoo: 'ORCL', name: 'Oracle', basePrice: 126.80, volatility: 0.3 },
-  { tv: 'NYSE:JPM', yahoo: 'JPM', name: 'JPMorgan', basePrice: 198.50, volatility: 0.4 },
-  { tv: 'NYSE:V', yahoo: 'V', name: 'Visa', basePrice: 279.30, volatility: 0.4 },
-  { tv: 'NYSE:WMT', yahoo: 'WMT', name: 'Walmart', basePrice: 67.20, volatility: 0.2 },
-  { tv: 'NYSE:DIS', yahoo: 'DIS', name: 'Disney', basePrice: 112.40, volatility: 0.3 },
-  { tv: 'NYSE:BA', yahoo: 'BA', name: 'Boeing', basePrice: 178.90, volatility: 0.8 },
-  { tv: 'NYSE:KO', yahoo: 'KO', name: 'Coca-Cola', basePrice: 62.50, volatility: 0.1 },
-  { tv: 'NYSE:PFE', yahoo: 'PFE', name: 'Pfizer', basePrice: 28.30, volatility: 0.2 },
-]
-
-const INDEX_SYMBOLS: Array<{ tv: string; yahoo: string; name: string; basePrice: number; volatility: number }> = [
-  { tv: 'TVC:US30', yahoo: '^DJI', name: 'US30', basePrice: 39150.0, volatility: 50 },
-  { tv: 'TVC:SPX500', yahoo: '^GSPC', name: 'SPX500', basePrice: 5320.0, volatility: 8 },
-  { tv: 'TVC:NDX100', yahoo: '^NDX', name: 'NDX100', basePrice: 18450.0, volatility: 30 },
-  { tv: 'TVC:UK100', yahoo: '^FTSE', name: 'UK100', basePrice: 8275.0, volatility: 15 },
-  { tv: 'TVC:DE40', yahoo: '^GDAXI', name: 'DE40', basePrice: 18350.0, volatility: 25 },
-  { tv: 'TVC:JP225', yahoo: '^N225', name: 'JP225', basePrice: 38450.0, volatility: 80 },
-  { tv: 'TVC:HK50', yahoo: '^HSI', name: 'HK50', basePrice: 18250.0, volatility: 50 },
+// ─── Deriv Symbol Mapping ──────────────────────────────────────────
+const DERIV_SYMBOLS: Array<{
+  id: string
+  deriv: string
+  tv: string
+  name: string
+  category: string
+  pipSize: number
+}> = [
+  { id: 'R_10',      deriv: 'R_10',      tv: 'DERIV:R_10',      name: 'Volatility 10 Index',     category: 'Synthetic Indices', pipSize: 2 },
+  { id: 'R_25',      deriv: 'R_25',      tv: 'DERIV:R_25',      name: 'Volatility 25 Index',     category: 'Synthetic Indices', pipSize: 2 },
+  { id: 'R_50',      deriv: 'R_50',      tv: 'DERIV:R_50',      name: 'Volatility 50 Index',     category: 'Synthetic Indices', pipSize: 2 },
+  { id: 'R_75',      deriv: 'R_75',      tv: 'DERIV:R_75',      name: 'Volatility 75 Index',     category: 'Synthetic Indices', pipSize: 2 },
+  { id: 'R_100',     deriv: 'R_100',     tv: 'DERIV:R_100',     name: 'Volatility 100 Index',    category: 'Synthetic Indices', pipSize: 2 },
+  { id: '1HZ10V',    deriv: '1HZ10V',    tv: 'DERIV:1HZ10V',    name: 'Volatility 10 (1s)',       category: '1-Second Indices', pipSize: 2 },
+  { id: '1HZ25V',    deriv: '1HZ25V',    tv: 'DERIV:1HZ25V',    name: 'Volatility 25 (1s)',       category: '1-Second Indices', pipSize: 2 },
+  { id: '1HZ50V',    deriv: '1HZ50V',    tv: 'DERIV:1HZ50V',    name: 'Volatility 50 (1s)',       category: '1-Second Indices', pipSize: 2 },
+  { id: '1HZ75V',    deriv: '1HZ75V',    tv: 'DERIV:1HZ75V',    name: 'Volatility 75 (1s)',       category: '1-Second Indices', pipSize: 2 },
+  { id: '1HZ100V',   deriv: '1HZ100V',   tv: 'DERIV:1HZ100V',   name: 'Volatility 100 (1s)',      category: '1-Second Indices', pipSize: 2 },
+  { id: 'CRASH300N',  deriv: 'CRASH300N',  tv: 'DERIV:CRASH300N',  name: 'Crash 300 Index',         category: 'Crash/Boom',           pipSize: 2 },
+  { id: 'BOOM300N',   deriv: 'BOOM300N',   tv: 'DERIV:BOOM300N',   name: 'Boom 300 Index',          category: 'Crash/Boom',           pipSize: 2 },
+  { id: 'stpRNG',    deriv: 'stpRNG',    tv: 'DERIV:stpRNG',    name: 'Step Index',              category: 'Step Indices',         pipSize: 2 },
+  { id: 'JD10',      deriv: 'JD10',      tv: 'DERIV:JD10',      name: 'Jump 10 Index',           category: 'Jump Indices',         pipSize: 2 },
+  { id: 'JD25',      deriv: 'JD25',      tv: 'DERIV:JD25',      name: 'Jump 25 Index',           category: 'Jump Indices',         pipSize: 2 },
+  { id: 'JD50',      deriv: 'JD50',      tv: 'DERIV:JD50',      name: 'Jump 50 Index',           category: 'Jump Indices',         pipSize: 2 },
+  { id: 'JD75',      deriv: 'JD75',      tv: 'DERIV:JD75',      name: 'Jump 75 Index',           category: 'Jump Indices',         pipSize: 2 },
+  { id: 'JD100',     deriv: 'JD100',     tv: 'DERIV:JD100',     name: 'Jump 100 Index',          category: 'Jump Indices',         pipSize: 2 },
+  { id: 'frxEURUSD', deriv: 'frxEURUSD', tv: 'FX:EURUSD',       name: 'EUR/USD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxGBPUSD', deriv: 'frxGBPUSD', tv: 'FX:GBPUSD',       name: 'GBP/USD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxUSDJPY', deriv: 'frxUSDJPY', tv: 'FX:USDJPY',       name: 'USD/JPY',                category: 'Forex',                 pipSize: 3 },
+  { id: 'frxUSDCHF', deriv: 'frxUSDCHF', tv: 'FX:USDCHF',       name: 'USD/CHF',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxAUDUSD', deriv: 'frxAUDUSD', tv: 'FX:AUDUSD',       name: 'AUD/USD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxNZDUSD', deriv: 'frxNZDUSD', tv: 'FX:NZDUSD',       name: 'NZD/USD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxUSDCAD', deriv: 'frxUSDCAD', tv: 'FX:USDCAD',       name: 'USD/CAD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxEURGBP', deriv: 'frxEURGBP', tv: 'FX:EURGBP',       name: 'EUR/GBP',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxEURJPY', deriv: 'frxEURJPY', tv: 'FX:EURJPY',       name: 'EUR/JPY',                category: 'Forex',                 pipSize: 3 },
+  { id: 'frxGBPJPY', deriv: 'frxGBPJPY', tv: 'FX:GBPJPY',       name: 'GBP/JPY',                category: 'Forex',                 pipSize: 3 },
+  { id: 'frxAUDJPY', deriv: 'frxAUDJPY', tv: 'FX:AUDJPY',       name: 'AUD/JPY',                category: 'Forex',                 pipSize: 3 },
+  { id: 'frxEURAUD', deriv: 'frxEURAUD', tv: 'FX:EURAUD',       name: 'EUR/AUD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxEURCAD', deriv: 'frxEURCAD', tv: 'FX:EURCAD',       name: 'EUR/CAD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxEURCHF', deriv: 'frxEURCHF', tv: 'FX:EURCHF',       name: 'EUR/CHF',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxGBPCHF', deriv: 'frxGBPCHF', tv: 'FX:GBPCHF',       name: 'GBP/CHF',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxGBPAUD', deriv: 'frxGBPAUD', tv: 'FX:GBPAUD',       name: 'GBP/AUD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxGBPCAD', deriv: 'frxGBPCAD', tv: 'FX:GBPCAD',       name: 'GBP/CAD',                category: 'Forex',                 pipSize: 5 },
+  { id: 'frxXAUUSD', deriv: 'frxXAUUSD', tv: 'FX:XAUUSD',       name: 'Gold',                   category: 'Commodities',           pipSize: 2 },
+  { id: 'frxXAGUSD', deriv: 'frxXAGUSD', tv: 'FX:XAGUSD',       name: 'Silver',                 category: 'Commodities',           pipSize: 3 },
 ]
 
 // ─── In-Memory Storage ──────────────────────────────────────────────
@@ -138,20 +124,19 @@ const MAX_TICKS = 500
 const ANALYSIS_WINDOW = 100
 
 function getLastDigit(price: number): number {
-  // Last digit of the integer part of the price
-  // e.g. 63461.36 → 63461 → last digit is 1
   return Math.abs(Math.floor(price)) % 10
 }
 
-function initSymbolData(tvSymbol: string, name: string, category: string, source: 'binance' | 'poll', initialPrice?: number): SymbolData {
-  if (symbolDataMap.has(tvSymbol)) return symbolDataMap.get(tvSymbol)!
+function initSymbolData(id: string, deriv: string, tv: string, name: string, category: string, pipSize: number, initialPrice?: number): SymbolData {
+  if (symbolDataMap.has(id)) return symbolDataMap.get(id)!
 
   const data: SymbolData = {
-    symbol: tvSymbol.includes('BINANCE:') ? CRYPTO_SYMBOLS.find(c => c.tv === tvSymbol)?.binance || tvSymbol : tvSymbol,
-    tvSymbol,
+    symbol: deriv,
+    tvSymbol: tv,
     name,
     category,
-    source,
+    source: 'deriv',
+    pipSize,
     ticks: [],
     currentPrice: initialPrice || 0,
     prevPrice: initialPrice || 0,
@@ -178,31 +163,30 @@ function initSymbolData(tvSymbol: string, name: string, category: string, source
     data.lowPrice = initialPrice
   }
 
-  symbolDataMap.set(tvSymbol, data)
+  symbolDataMap.set(id, data)
   return data
 }
 
-function addTick(tvSymbol: string, price: number, timestamp?: number): void {
-  const data = symbolDataMap.get(tvSymbol)
+function addTick(id: string, price: number, timestamp: number): void {
+  const data = symbolDataMap.get(id)
   if (!data) return
 
-  const ts = timestamp || Date.now()
   const lastDigit = getLastDigit(price)
 
   data.prevPrice = data.currentPrice
   data.currentPrice = price
   data.lastDigit = lastDigit
-  data.lastTickTime = ts
+  data.lastTickTime = timestamp
 
-  const tick: Tick = { price, timestamp: ts, lastDigit }
+  if (data.ticks.length > 0 && data.ticks[data.ticks.length - 1].price === price) return
+
+  const tick: Tick = { price, timestamp, lastDigit }
   data.ticks.push(tick)
 
-  // Trim to max
   if (data.ticks.length > MAX_TICKS) {
     data.ticks = data.ticks.slice(-MAX_TICKS)
   }
 
-  // Compute stats over analysis window
   const window = data.ticks.slice(-ANALYSIS_WINDOW)
   data.digitCounts = new Array(10).fill(0)
   data.evenCount = 0
@@ -222,23 +206,19 @@ function addTick(tvSymbol: string, price: number, timestamp?: number): void {
     if (t.price < data.lowPrice) data.lowPrice = t.price
   }
 
-  // Percentages
   const total = window.length
   data.digitPercentages = data.digitCounts.map(c => parseFloat(((c / total) * 100).toFixed(1)))
 
-  // Price change
   if (window.length >= 2) {
     data.priceChange = parseFloat((price - window[0].price).toFixed(6))
     data.priceChangePercent = parseFloat(((data.priceChange / window[0].price) * 100).toFixed(4))
   }
 
-  // Tick speed (ticks per second)
   if (window.length >= 2) {
     const timeSpan = (window[window.length - 1].timestamp - window[0].timestamp) / 1000
     data.tickSpeed = timeSpan > 0 ? parseFloat((window.length / timeSpan).toFixed(2)) : 0
   }
 
-  // Streak detection
   let streakType = lastDigit % 2 === 0 ? 'even' : 'odd'
   let streakLen = 1
   for (let i = window.length - 2; i >= 0; i--) {
@@ -250,8 +230,8 @@ function addTick(tvSymbol: string, price: number, timestamp?: number): void {
   data.streakLength = streakLen
 }
 
-function getDigitAnalysis(tvSymbol: string): DigitAnalysis | null {
-  const data = symbolDataMap.get(tvSymbol)
+function getDigitAnalysis(id: string): DigitAnalysis | null {
+  const data = symbolDataMap.get(id)
   if (!data) return null
 
   const window = data.ticks.slice(-ANALYSIS_WINDOW)
@@ -260,6 +240,8 @@ function getDigitAnalysis(tvSymbol: string): DigitAnalysis | null {
   return {
     symbol: data.symbol,
     tvSymbol: data.tvSymbol,
+    name: data.name,
+    category: data.category,
     currentPrice: data.currentPrice,
     lastDigit: data.lastDigit,
     digitCounts: data.digitCounts,
@@ -281,155 +263,133 @@ function getDigitAnalysis(tvSymbol: string): DigitAnalysis | null {
     tickSpeed: data.tickSpeed,
     recentTicks: data.ticks.slice(-25).map(t => ({ price: t.price, timestamp: t.timestamp, lastDigit: t.lastDigit })),
     totalTicks: data.ticks.length,
+    pipSize: data.pipSize,
   }
 }
 
-// ─── Binance WebSocket ──────────────────────────────────────────────
-let binanceWs: WebSocket | null = null
+// ─── Deriv WebSocket ────────────────────────────────────────────────
+let derivWs: WebSocket | null = null
 let reconnectDelay = 1000
+let subscribedSymbols = new Set<string>()
 
-function connectBinance(): void {
-  const streams = CRYPTO_SYMBOLS.map(s => `${s.binance}@trade`).join('/')
-  const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`
-
-  console.log(`[Binance] Connecting to ${wsUrl.substring(0, 80)}...`)
+function connectDeriv(): void {
+  console.log(`[Deriv] Connecting...`)
 
   try {
-    binanceWs = new WebSocket(wsUrl)
+    derivWs = new WebSocket(DERIV_WS_URL)
 
-    binanceWs.on('open', () => {
-      console.log('[Binance] Connected! Receiving live trades...')
+    derivWs.on('open', () => {
+      console.log('[Deriv] Connected!')
       reconnectDelay = 1000
+      subscribeAll()
     })
 
-    binanceWs.on('message', (raw: Buffer | string) => {
+    derivWs.on('message', (raw: Buffer | string) => {
       try {
         const msg = JSON.parse(raw.toString())
-        if (msg.stream && msg.data && msg.data.e === 'trade') {
-          const binanceSymbol = msg.stream.replace('@trade', '')
-          const cryptoConfig = CRYPTO_SYMBOLS.find(c => c.binance === binanceSymbol)
-          if (!cryptoConfig) return
+        if (!msg) return
 
-          const tvSymbol = cryptoConfig.tv
-          const price = parseFloat(msg.data.p)
+        if (msg.tick) {
+          try {
+            const tick = msg.tick
+            const symbol = tick.symbol
+            const price = tick.quote
+            const epoch = tick.epoch * 1000
 
-          // Init if needed
-          if (!symbolDataMap.has(tvSymbol)) {
-            initSymbolData(tvSymbol, cryptoConfig.name, 'Crypto', 'binance', price)
-          }
+            if (!symbolDataMap.has(symbol)) {
+              const symConfig = DERIV_SYMBOLS.find(s => s.deriv === symbol)
+              if (symConfig) {
+                initSymbolData(symConfig.id, symConfig.deriv, symConfig.tv, symConfig.name, symConfig.category, symConfig.pipSize, price)
+              }
+            }
 
-          addTick(tvSymbol, price, msg.data.T)
+            addTick(symbol, price, epoch)
+            subscribedSymbols.add(symbol)
+          } catch (e) { /* skip bad tick */ }
+        }
+
+        if (msg.history) {
+          try {
+            const symbol = msg.echo_req?.ticks_history
+            if (!symbol) return
+
+            const prices: Array<[number, number]> = msg.history?.prices || []
+            const times: number[] = msg.history?.times || []
+
+            if (!symbolDataMap.has(symbol)) {
+              const symConfig = DERIV_SYMBOLS.find(s => s.deriv === symbol)
+              if (symConfig) {
+                initSymbolData(symConfig.id, symConfig.deriv, symConfig.tv, symConfig.name, symConfig.category, symConfig.pipSize)
+              }
+            }
+
+            for (let i = 0; i < prices.length; i++) {
+              if (prices[i] !== undefined && times[i] !== undefined) {
+                addTick(symbol, prices[i], times[i] * 1000)
+              }
+            }
+
+            subscribedSymbols.add(symbol)
+          } catch (e) { /* skip bad history */ }
+        }
+
+        if (msg.error) {
+          // Silently ignore errors (already subscribed, market closed, etc.)
         }
       } catch {
-        // Ignore parse errors
+        // Silently ignore unparseable messages
       }
     })
 
-    binanceWs.on('close', () => {
-      console.log('[Binance] Disconnected. Reconnecting...')
-      setTimeout(connectBinance, reconnectDelay)
+    derivWs.on('close', () => {
+      console.log('[Deriv] Disconnected. Reconnecting...')
+      setTimeout(connectDeriv, reconnectDelay)
       reconnectDelay = Math.min(reconnectDelay * 2, 30000)
     })
 
-    binanceWs.on('error', (err) => {
-      console.error('[Binance] Error:', err.message)
+    derivWs.on('error', (err) => {
+      console.error('[Deriv] Error:', err.message)
     })
   } catch (err) {
-    console.error('[Binance] Connection error:', err)
-    setTimeout(connectBinance, reconnectDelay)
+    console.error('[Deriv] Connection error:', err)
+    setTimeout(connectDeriv, reconnectDelay)
     reconnectDelay = Math.min(reconnectDelay * 2, 30000)
   }
 }
 
-// ─── Poll-based Price Updates (Forex, Stocks, Indices) ─────────────
-let pollPrices: Map<string, number> = new Map()
+function subscribeAll(): void {
+  if (!derivWs || derivWs.readyState !== WebSocket.OPEN) return
 
-// Try to fetch real prices from Yahoo Finance
-async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1m&range=1d`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(5000)
-    })
-    if (!res.ok) return null
-    const json = await res.json()
-    const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close
-    if (closes && closes.length > 0) {
-      const last = closes[closes.length - 1]
-      return last !== null && last !== undefined ? last : null
+  for (const sym of DERIV_SYMBOLS) {
+    initSymbolData(sym.id, sym.deriv, sym.tv, sym.name, sym.category, sym.pipSize)
+  }
+
+  // Subscribe all at once
+  for (const sym of DERIV_SYMBOLS) {
+    derivWs!.send(JSON.stringify({ ticks: sym.deriv, subscribe: 1 }))
+  }
+  console.log(`[Deriv] Sent tick subscriptions for ${DERIV_SYMBOLS.length} symbols`)
+
+  // Request tick history with a delay
+  setTimeout(() => {
+    if (!derivWs || derivWs.readyState !== WebSocket.OPEN) return
+    for (const sym of DERIV_SYMBOLS) {
+      derivWs!.send(JSON.stringify({
+        ticks_history: sym.deriv,
+        count: 100,
+        end: 'latest',
+        style: 'ticks',
+      }))
     }
-    return null
-  } catch {
-    return null
-  }
+    console.log(`[Deriv] Requested tick history for ${DERIV_SYMBOLS.length} symbols`)
+  }, 2000)
 }
 
-// Initialize forex/stocks/indices with base prices and start polling
-function initPollSymbols(): void {
-  // Forex
-  for (const f of FOREX_SYMBOLS) {
-    initSymbolData(f.tv, f.name, 'Forex', 'poll', f.basePrice)
-    pollPrices.set(f.tv, f.basePrice)
-  }
-
-  // Stocks
-  for (const s of STOCK_SYMBOLS) {
-    initSymbolData(s.tv, s.name, 'Stocks', 'poll', s.basePrice)
-    pollPrices.set(s.tv, s.basePrice)
-  }
-
-  // Indices
-  for (const i of INDEX_SYMBOLS) {
-    initSymbolData(i.tv, i.name, 'Indices', 'poll', i.basePrice)
-    pollPrices.set(i.tv, i.basePrice)
-  }
-}
-
-async function pollAndUpdatePrices(): Promise<void> {
-  const allPollSymbols = [
-    ...FOREX_SYMBOLS.map(f => ({ tv: f.tv, yahoo: f.tv.replace('FX:', ''), vol: f.volatility })),
-    ...STOCK_SYMBOLS.map(s => ({ tv: s.tv, yahoo: s.yahoo, vol: s.volatility })),
-    ...INDEX_SYMBOLS.map(i => ({ tv: i.tv, yahoo: i.yahoo, vol: i.volatility })),
-  ]
-
-  // Try to fetch a few real prices (rate limited)
-  const batch = allPollSymbols.slice(0, 5)
-  for (const sym of batch) {
-    try {
-      const realPrice = await fetchYahooPrice(sym.yahoo)
-      if (realPrice && realPrice > 0) {
-        pollPrices.set(sym.tv, realPrice)
-        console.log(`[Yahoo] ${sym.tv} = ${realPrice}`)
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // Generate tick variations for all poll-based symbols
-  const now = Date.now()
-  for (const sym of allPollSymbols) {
-    const base = pollPrices.get(sym.tv) || 0
-    if (base <= 0) continue
-
-    // Simulate small price movements
-    const change = (Math.random() - 0.5) * 2 * sym.vol
-    const newPrice = parseFloat((base + change).toFixed(
-      base > 1000 ? 2 : base > 1 ? 4 : 6
-    ))
-    pollPrices.set(sym.tv, newPrice)
-    addTick(sym.tv, newPrice, now)
-  }
-}
-
-// ─── Socket.io Server ───────────────────────────────────────────────
+// ─── HTTP REST API ──────────────────────────────────────────────────
 const httpServer = createServer((req, res) => {
-  // Simple REST API handler
   const parsedUrl = new URL(req.url || '/', `http://localhost:${PORT}`)
   const pathname = parsedUrl.pathname
 
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -441,22 +401,19 @@ const httpServer = createServer((req, res) => {
 
   if (req.method === 'GET') {
     if (pathname === '/api/price') {
-      const symbol = parsedUrl.searchParams.get('symbol')
-      const data = symbol ? symbolDataMap.get(symbol) : null
+      const symbol = parsedUrl.searchParams.get('symbol') || ''
+      const config = DERIV_SYMBOLS.find(s => s.id === symbol || s.deriv === symbol || s.tv === symbol)
+      const key = config?.id || symbol
+      const data = symbolDataMap.get(key)
       if (data) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
-          symbol: data.tvSymbol,
-          price: data.currentPrice,
-          prevPrice: data.prevPrice,
-          change: data.priceChange,
-          changePercent: data.priceChangePercent,
-          high: data.highPrice,
-          low: data.lowPrice,
-          lastDigit: data.lastDigit,
-          tickSpeed: data.tickSpeed,
-          totalTicks: data.ticks.length,
-          source: data.source,
+          symbol: data.tvSymbol, derivSymbol: data.symbol, name: data.name,
+          price: data.currentPrice, prevPrice: data.prevPrice,
+          change: data.priceChange, changePercent: data.priceChangePercent,
+          high: data.highPrice, low: data.lowPrice,
+          lastDigit: data.lastDigit, tickSpeed: data.tickSpeed,
+          totalTicks: data.ticks.length, source: 'deriv', pipSize: data.pipSize,
           timestamp: new Date().toISOString(),
         }))
       } else {
@@ -467,17 +424,13 @@ const httpServer = createServer((req, res) => {
     }
 
     if (pathname === '/api/ticks') {
-      const symbol = parsedUrl.searchParams.get('symbol')
+      const symbol = parsedUrl.searchParams.get('symbol') || ''
       const limit = parseInt(parsedUrl.searchParams.get('limit') || '100')
-      const data = symbol ? symbolDataMap.get(symbol) : null
+      const config = DERIV_SYMBOLS.find(s => s.id === symbol || s.deriv === symbol || s.tv === symbol)
+      const data = symbolDataMap.get(config?.id || symbol)
       if (data) {
-        const ticks = data.ticks.slice(-limit)
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({
-          symbol: data.tvSymbol,
-          ticks,
-          count: ticks.length,
-        }))
+        res.end(JSON.stringify({ symbol: data.tvSymbol, ticks: data.ticks.slice(-limit), count: data.ticks.length }))
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Symbol not found', symbol }))
@@ -486,24 +439,20 @@ const httpServer = createServer((req, res) => {
     }
 
     if (pathname === '/api/digits') {
-      const symbol = parsedUrl.searchParams.get('symbol')
+      const symbol = parsedUrl.searchParams.get('symbol') || ''
       const barrier = parseInt(parsedUrl.searchParams.get('barrier') || '4')
-      const analysis = symbol ? getDigitAnalysis(symbol) : null
+      const config = DERIV_SYMBOLS.find(s => s.id === symbol || s.deriv === symbol || s.tv === symbol)
+      const key = config?.id || symbol
+      const analysis = getDigitAnalysis(key)
       if (analysis) {
-        // Recompute over/under for the requested barrier
-        const data = symbolDataMap.get(symbol)!
+        const data = symbolDataMap.get(key)!
         const window = data.ticks.slice(-ANALYSIS_WINDOW)
-        let oCount = 0
-        let uCount = 0
-        for (const t of window) {
-          if (t.lastDigit > barrier) oCount++
-          else uCount++
-        }
+        let oCount = 0, uCount = 0
+        for (const t of window) { if (t.lastDigit > barrier) oCount++; else uCount++ }
         analysis.overCount = oCount
         analysis.underCount = uCount
         analysis.overPercent = window.length > 0 ? parseFloat(((oCount / window.length) * 100).toFixed(1)) : 0
         analysis.underPercent = window.length > 0 ? parseFloat(((uCount / window.length) * 100).toFixed(1)) : 0
-
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(analysis))
       } else {
@@ -514,29 +463,13 @@ const httpServer = createServer((req, res) => {
     }
 
     if (pathname === '/api/all-prices') {
-      const prices: Array<{
-        symbol: string
-        name: string
-        category: string
-        price: number
-        change: number
-        changePercent: number
-        lastDigit: number
-        source: string
-        tickSpeed: number
-      }> = []
-      for (const [tvSymbol, data] of symbolDataMap) {
+      const prices: any[] = []
+      for (const [id, data] of symbolDataMap) {
         if (data.currentPrice > 0) {
           prices.push({
-            symbol: data.tvSymbol,
-            name: data.name,
-            category: data.category,
-            price: data.currentPrice,
-            change: data.priceChange,
-            changePercent: data.priceChangePercent,
-            lastDigit: data.lastDigit,
-            source: data.source,
-            tickSpeed: data.tickSpeed,
+            symbol: id, name: data.name, category: data.category,
+            price: data.currentPrice, change: data.priceChange, changePercent: data.priceChangePercent,
+            lastDigit: data.lastDigit, source: 'deriv', tickSpeed: data.tickSpeed,
           })
         }
       }
@@ -545,12 +478,22 @@ const httpServer = createServer((req, res) => {
       return
     }
 
+    if (pathname === '/api/symbols') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        symbols: DERIV_SYMBOLS.map(s => ({ id: s.id, deriv: s.deriv, tv: s.tv, name: s.name, category: s.category, pipSize: s.pipSize })),
+        total: DERIV_SYMBOLS.length,
+      }))
+      return
+    }
+
     if (pathname === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({
         status: 'ok',
         symbols: symbolDataMap.size,
-        binanceConnected: binanceWs?.readyState === WebSocket.OPEN,
+        subscribedSymbols: subscribedSymbols.size,
+        derivConnected: derivWs?.readyState === WebSocket.OPEN,
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
       }))
@@ -562,109 +505,52 @@ const httpServer = createServer((req, res) => {
   res.end(JSON.stringify({ error: 'Not found' }))
 })
 
+// ─── Socket.io ──────────────────────────────────────────────────
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   pingTimeout: 60000,
   pingInterval: 25000,
 })
 
-// Socket.io event handlers
 io.on('connection', (socket) => {
-  console.log(`[Socket.io] Client connected: ${socket.id}`)
-
-  // Send initial state for all symbols
+  console.log(`[io] Client connected: ${socket.id}`)
   const allAnalysis: Record<string, DigitAnalysis> = {}
-  for (const [tvSymbol] of symbolDataMap) {
-    const analysis = getDigitAnalysis(tvSymbol)
-    if (analysis) allAnalysis[tvSymbol] = analysis
+  for (const [id] of symbolDataMap) {
+    const a = getDigitAnalysis(id)
+    if (a && a.totalTicks > 0) allAnalysis[id] = a
   }
-  socket.emit('init', {
-    symbols: Object.keys(symbolDataMap.size > 0 ? allAnalysis : {}).length,
-    analyses: allAnalysis,
-    timestamp: new Date().toISOString(),
-  })
-
-  // Subscribe to specific symbol
-  socket.on('subscribe', (symbol: string) => {
-    socket.join(`symbol:${symbol}`)
-    console.log(`[Socket.io] ${socket.id} subscribed to ${symbol}`)
-    // Send current analysis
-    const analysis = getDigitAnalysis(symbol)
-    if (analysis) socket.emit('digit-update', analysis)
-  })
-
-  socket.on('unsubscribe', (symbol: string) => {
-    socket.leave(`symbol:${symbol}`)
-  })
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket.io] Client disconnected: ${socket.id}`)
-  })
+  socket.emit('init', { symbols: Object.keys(allAnalysis).length, analyses: allAnalysis, timestamp: new Date().toISOString() })
+  socket.on('subscribe', (symbol: string) => { socket.join(`symbol:${symbol}`); const a = getDigitAnalysis(symbol); if (a) socket.emit('digit-update', a) })
+  socket.on('unsubscribe', (symbol: string) => { socket.leave(`symbol:${symbol}`) })
+  socket.on('disconnect', () => { console.log(`[io] Client disconnected: ${socket.id}`) })
 })
 
-// Forward tick events to subscribed clients
-function broadcastTick(tvSymbol: string): void {
-  const data = symbolDataMap.get(tvSymbol)
-  if (!data) return
-
-  const analysis = getDigitAnalysis(tvSymbol)
-  if (!analysis) return
-
-  // Send to symbol-specific rooms
-  io.to(`symbol:${tvSymbol}`).emit('tick', {
-    symbol: tvSymbol,
-    price: data.currentPrice,
-    prevPrice: data.prevPrice,
-    lastDigit: data.lastDigit,
-    change: data.priceChange,
-    changePercent: data.priceChangePercent,
-    timestamp: Date.now(),
-  })
-}
-
-// Periodic digit-update broadcast
 setInterval(() => {
   const updates: Record<string, DigitAnalysis> = {}
-  for (const [tvSymbol, data] of symbolDataMap) {
-    if (data.ticks.length > 0) {
-      const analysis = getDigitAnalysis(tvSymbol)
-      if (analysis) updates[tvSymbol] = analysis
-    }
+  for (const [id, data] of symbolDataMap) {
+    if (data.ticks.length > 0) { const a = getDigitAnalysis(id); if (a) updates[id] = a }
   }
-  if (Object.keys(updates).length > 0) {
-    io.emit('digit-update-all', updates)
-  }
+  if (Object.keys(updates).length > 0) io.emit('digit-update-all', updates)
 }, 2000)
 
-// ─── Start ───────────────────────────────────────────────────────────
-console.log('[TickFeed] Initializing...')
+process.on('uncaughtException', (err) => {
+  console.error('[TickFeed] Uncaught error:', err)
+  // Don't exit — keep running
+})
 
-// Init poll-based symbols
-initPollSymbols()
+process.on('unhandledRejection', (reason) => {
+  console.error('[TickFeed] Unhandled rejection:', reason)
+})
 
-// Connect to Binance
-connectBinance()
+// ─── Start ───────────────────────────────────────────────────────
+console.log('[TickFeed] Initializing with Deriv API...')
+connectDeriv()
 
-// Start polling non-crypto prices every 5 seconds
-setInterval(pollAndUpdatePrices, 5000)
-
-// Start HTTP + Socket.io server
 httpServer.listen(PORT, () => {
-  console.log(`[TickFeed] Server running on port ${PORT}`)
-  console.log(`[TickFeed] REST API: http://localhost:${PORT}/api/price?symbol=BINANCE:BTCUSDT`)
-  console.log(`[TickFeed] Digit Analysis: http://localhost:${PORT}/api/digits?symbol=BINANCE:BTCUSDT`)
-  console.log(`[TickFeed] All Prices: http://localhost:${PORT}/api/all-prices`)
-  console.log(`[TickFeed] Health: http://localhost:${PORT}/api/health`)
+  console.log(`[TickFeed] Running on port ${PORT}`)
+  console.log(`[TickFeed] Deriv API: ${DERIV_WS_URL}`)
+  console.log(`[TickFeed] ${DERIV_SYMBOLS.length} symbols`)
 })
 
-process.on('SIGTERM', () => {
-  console.log('[TickFeed] Shutting down...')
-  if (binanceWs) binanceWs.close()
-  httpServer.close(() => process.exit(0))
-})
-
-process.on('SIGINT', () => {
-  console.log('[TickFeed] Shutting down...')
-  if (binanceWs) binanceWs.close()
-  httpServer.close(() => process.exit(0))
-})
+process.on('SIGTERM', () => { console.log('[TickFeed] Shutting down...'); if (derivWs) derivWs.close(); httpServer.close(() => process.exit(0)) })
+process.on('SIGINT', () => { console.log('[TickFeed] Shutting down...'); if (derivWs) derivWs.close(); httpServer.close(() => process.exit(0)) })

@@ -1,4 +1,4 @@
-// ─── TradingView / Deriv-Style Types ─────────────────────────────
+// ─── Deriv + TradingView Types ─────────────────────────────────────
 
 export interface TVSymbolInfo {
   symbol: string
@@ -228,76 +228,69 @@ export const TIME_DURATIONS: Duration[] = [
 ]
 
 // ─── Symbol shape ────────────────────────────────────────────────
-export type SymbolItem = { symbol: string; name: string; exchange: string; type: string; category: string }
+export type SymbolItem = {
+  symbol: string
+  name: string
+  exchange: string
+  type: string
+  category: string
+  deriv: string      // Deriv API symbol name
+  tv: string          // TradingView widget symbol for chart display
+}
 
-// ─── ALL_SYMBOLS – comprehensive flat list ───────────────────────
+// ─── ALL_SYMBOLS — Deriv symbols ───────────────────────────────────
 export const ALL_SYMBOLS: SymbolItem[] = [
-  // Crypto
-  { symbol: 'BINANCE:BTCUSDT',  name: 'BTC/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:ETHUSDT',  name: 'ETH/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:SOLUSDT',  name: 'SOL/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:BNBUSDT',  name: 'BNB/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:XRPUSDT',  name: 'XRP/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:ADAUSDT',  name: 'ADA/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:DOGEUSDT', name: 'DOGE/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:AVAXUSDT', name: 'AVAX/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:DOTUSDT',  name: 'DOT/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:MATICUSDT',name: 'MATIC/USDT',exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:LINKUSDT', name: 'LINK/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:SHIBUSDT', name: 'SHIB/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:ATOMUSDT', name: 'ATOM/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:UNIUSDT',  name: 'UNI/USDT',  exchange: 'Binance', type: 'crypto', category: 'Crypto' },
-  { symbol: 'BINANCE:NEARUSDT', name: 'NEAR/USDT', exchange: 'Binance', type: 'crypto', category: 'Crypto' },
+  // Synthetic Indices — Volatility
+  { symbol: 'R_10',    name: 'Volatility 10',     exchange: 'Deriv', type: 'synthetic', category: 'Synthetic Indices', deriv: 'R_10',    tv: 'DERIV:R_10' },
+  { symbol: 'R_25',    name: 'Volatility 25',     exchange: 'Deriv', type: 'synthetic', category: 'Synthetic Indices', deriv: 'R_25',    tv: 'DERIV:R_25' },
+  { symbol: 'R_50',    name: 'Volatility 50',     exchange: 'Deriv', type: 'synthetic', category: 'Synthetic Indices', deriv: 'R_50',    tv: 'DERIV:R_50' },
+  { symbol: 'R_75',    name: 'Volatility 75',     exchange: 'Deriv', type: 'synthetic', category: 'Synthetic Indices', deriv: 'R_75',    tv: 'DERIV:R_75' },
+  { symbol: 'R_100',   name: 'Volatility 100',    exchange: 'Deriv', type: 'synthetic', category: 'Synthetic Indices', deriv: 'R_100',   tv: 'DERIV:R_100' },
+  // Synthetic Indices — 1-Second
+  { symbol: '1HZ10V',  name: 'Volatility 10 (1s)', exchange: 'Deriv', type: 'synthetic', category: '1-Second Indices', deriv: '1HZ10V', tv: 'DERIV:1HZ10V' },
+  { symbol: '1HZ25V',  name: 'Volatility 25 (1s)', exchange: 'Deriv', type: 'synthetic', category: '1-Second Indices', deriv: '1HZ25V', tv: 'DERIV:1HZ25V' },
+  { symbol: '1HZ50V',  name: 'Volatility 50 (1s)', exchange: 'Deriv', type: 'synthetic', category: '1-Second Indices', deriv: '1HZ50V', tv: 'DERIV:1HZ50V' },
+  { symbol: '1HZ75V',  name: 'Volatility 75 (1s)', exchange: 'Deriv', type: 'synthetic', category: '1-Second Indices', deriv: '1HZ75V', tv: 'DERIV:1HZ75V' },
+  { symbol: '1HZ100V', name: 'Volatility 100 (1s)',exchange: 'Deriv', type: 'synthetic', category: '1-Second Indices', deriv: '1HZ100V',tv: 'DERIV:1HZ100V' },
+  // Crash & Boom
+  { symbol: 'CRASH300N',  name: 'Crash 300',  exchange: 'Deriv', type: 'crash_boom', category: 'Crash/Boom', deriv: 'CRASH300N', tv: 'DERIV:CRASH300N' },
+  { symbol: 'BOOM300N',   name: 'Boom 300',   exchange: 'Deriv', type: 'crash_boom', category: 'Crash/Boom', deriv: 'BOOM300N',   tv: 'DERIV:BOOM300N' },
+  // Step & Jump Indices
+  { symbol: 'stpRNG', name: 'Step Index', exchange: 'Deriv', type: 'step', category: 'Step/Jump Indices', deriv: 'stpRNG', tv: 'DERIV:stpRNG' },
+  { symbol: 'JD10',   name: 'Jump 10',   exchange: 'Deriv', type: 'jump', category: 'Step/Jump Indices', deriv: 'JD10',   tv: 'DERIV:JD10' },
+  { symbol: 'JD25',   name: 'Jump 25',   exchange: 'Deriv', type: 'jump', category: 'Step/Jump Indices', deriv: 'JD25',   tv: 'DERIV:JD25' },
+  { symbol: 'JD50',   name: 'Jump 50',   exchange: 'Deriv', type: 'jump', category: 'Step/Jump Indices', deriv: 'JD50',   tv: 'DERIV:JD50' },
+  { symbol: 'JD75',   name: 'Jump 75',   exchange: 'Deriv', type: 'jump', category: 'Step/Jump Indices', deriv: 'JD75',   tv: 'DERIV:JD75' },
+  { symbol: 'JD100',  name: 'Jump 100',  exchange: 'Deriv', type: 'jump', category: 'Step/Jump Indices', deriv: 'JD100',  tv: 'DERIV:JD100' },
   // Forex
-  { symbol: 'FX:EURUSD',  name: 'EUR/USD', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:GBPUSD',  name: 'GBP/USD', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:USDJPY',  name: 'USD/JPY', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:USDCHF',  name: 'USD/CHF', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:AUDUSD',  name: 'AUD/USD', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:NZDUSD',  name: 'NZD/USD', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:USDCAD',  name: 'USD/CAD', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:EURGBP',  name: 'EUR/GBP', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:EURJPY',  name: 'EUR/JPY', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:GBPJPY',  name: 'GBP/JPY', exchange: 'Forex', type: 'forex', category: 'Forex' },
-  { symbol: 'FX:XAUUSD',  name: 'Gold',    exchange: 'Forex', type: 'commodity', category: 'Commodities' },
-  { symbol: 'FX:XAGUSD',  name: 'Silver',  exchange: 'Forex', type: 'commodity', category: 'Commodities' },
-  { symbol: 'FX:USOIL',   name: 'Oil',     exchange: 'Forex', type: 'commodity', category: 'Commodities' },
-  // Stocks
-  { symbol: 'NASDAQ:AAPL', name: 'Apple',     exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:MSFT', name: 'Microsoft', exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:GOOGL',name: 'Alphabet',  exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:AMZN', name: 'Amazon',    exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:TSLA', name: 'Tesla',     exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:META', name: 'Meta',      exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:NVDA', name: 'NVIDIA',    exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:NFLX', name: 'Netflix',   exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:AMD',  name: 'AMD',       exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:INTC', name: 'Intel',     exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:PYPL', name: 'PayPal',    exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:CRM',  name: 'Salesforce',exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NASDAQ:ORCL', name: 'Oracle',    exchange: 'NASDAQ', type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:JPM',  name: 'JPMorgan',   exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:V',    name: 'Visa',       exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:WMT',  name: 'Walmart',    exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:DIS',  name: 'Disney',     exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:BA',   name: 'Boeing',     exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:KO',   name: 'Coca-Cola',  exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  { symbol: 'NYSE:PFE',  name: 'Pfizer',     exchange: 'NYSE',   type: 'stock', category: 'Stocks' },
-  // Indices
-  { symbol: 'TVC:US30',   name: 'US30',      exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:SPX500', name: 'SPX500',    exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:NDX100', name: 'NDX100',    exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:UK100',  name: 'UK100',     exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:DE40',   name: 'DE40',      exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:JP225',  name: 'JP225',     exchange: 'Index', type: 'index', category: 'Indices' },
-  { symbol: 'TVC:HK50',   name: 'HK50',      exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'frxEURUSD', name: 'EUR/USD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURUSD', tv: 'FX:EURUSD' },
+  { symbol: 'frxGBPUSD', name: 'GBP/USD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxGBPUSD', tv: 'FX:GBPUSD' },
+  { symbol: 'frxUSDJPY', name: 'USD/JPY', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxUSDJPY', tv: 'FX:USDJPY' },
+  { symbol: 'frxUSDCHF', name: 'USD/CHF', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxUSDCHF', tv: 'FX:USDCHF' },
+  { symbol: 'frxAUDUSD', name: 'AUD/USD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxAUDUSD', tv: 'FX:AUDUSD' },
+  { symbol: 'frxNZDUSD', name: 'NZD/USD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxNZDUSD', tv: 'FX:NZDUSD' },
+  { symbol: 'frxUSDCAD', name: 'USD/CAD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxUSDCAD', tv: 'FX:USDCAD' },
+  { symbol: 'frxEURGBP', name: 'EUR/GBP', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURGBP', tv: 'FX:EURGBP' },
+  { symbol: 'frxEURJPY', name: 'EUR/JPY', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURJPY', tv: 'FX:EURJPY' },
+  { symbol: 'frxGBPJPY', name: 'GBP/JPY', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxGBPJPY', tv: 'FX:GBPJPY' },
+  { symbol: 'frxAUDJPY', name: 'AUD/JPY', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxAUDJPY', tv: 'FX:AUDJPY' },
+  { symbol: 'frxEURAUD', name: 'EUR/AUD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURAUD', tv: 'FX:EURAUD' },
+  { symbol: 'frxEURCAD', name: 'EUR/CAD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURCAD', tv: 'FX:EURCAD' },
+  { symbol: 'frxEURCHF', name: 'EUR/CHF', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxEURCHF', tv: 'FX:EURCHF' },
+  { symbol: 'frxGBPCHF', name: 'GBP/CHF', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxGBPCHF', tv: 'FX:GBPCHF' },
+  { symbol: 'frxGBPAUD', name: 'GBP/AUD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxGBPAUD', tv: 'FX:GBPAUD' },
+  { symbol: 'frxGBPCAD', name: 'GBP/CAD', exchange: 'Deriv', type: 'forex', category: 'Forex', deriv: 'frxGBPCAD', tv: 'FX:GBPCAD' },
+  // Commodities
+  { symbol: 'frxXAUUSD', name: 'Gold',   exchange: 'Deriv', type: 'commodity', category: 'Commodities', deriv: 'frxXAUUSD', tv: 'FX:XAUUSD' },
+  { symbol: 'frxXAGUSD', name: 'Silver', exchange: 'Deriv', type: 'commodity', category: 'Commodities', deriv: 'frxXAGUSD', tv: 'FX:XAGUSD' },
 ]
 
 export const SYMBOL_CATEGORIES: Array<{ id: string; label: string; symbols: SymbolItem[] }> = [
-  { id: 'crypto', label: 'Crypto', symbols: ALL_SYMBOLS.filter(s => s.category === 'Crypto') },
+  { id: 'synthetic', label: 'Synthetic Indices', symbols: ALL_SYMBOLS.filter(s => s.category === 'Synthetic Indices') },
+  { id: '1second', label: '1-Second Indices', symbols: ALL_SYMBOLS.filter(s => s.category === '1-Second Indices') },
+  { id: 'crash_boom', label: 'Crash/Boom', symbols: ALL_SYMBOLS.filter(s => s.category === 'Crash/Boom') },
+  { id: 'step_jump', label: 'Step/Jump', symbols: ALL_SYMBOLS.filter(s => s.category === 'Step/Jump Indices') },
   { id: 'forex', label: 'Forex', symbols: ALL_SYMBOLS.filter(s => s.category === 'Forex') },
-  { id: 'stocks', label: 'Stocks', symbols: ALL_SYMBOLS.filter(s => s.category === 'Stocks') },
-  { id: 'indices', label: 'Indices', symbols: ALL_SYMBOLS.filter(s => s.category === 'Indices') },
   { id: 'commodities', label: 'Commodities', symbols: ALL_SYMBOLS.filter(s => s.category === 'Commodities') },
 ]
 
@@ -307,6 +300,7 @@ export function searchSymbols(query: string): SymbolItem[] {
   return ALL_SYMBOLS.filter(s =>
     s.symbol.toLowerCase().includes(q) ||
     s.name.toLowerCase().includes(q) ||
+    s.deriv.toLowerCase().includes(q) ||
     s.exchange.toLowerCase().includes(q) ||
     s.category.toLowerCase().includes(q)
   )

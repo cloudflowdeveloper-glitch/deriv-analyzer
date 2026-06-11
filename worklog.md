@@ -130,3 +130,33 @@ Stage Summary:
 - LIVE/OFFLINE badge in analysis panel shows connection status
 - Verified via Agent Browser: all live data elements present (LIVE, Last Digit, ticks analyzed, Recent Ticks, Live Price, Binance source)
 
+---
+Task ID: 9
+Agent: Main Agent
+Task: Replace Binance with Deriv WebSocket API for live price data
+
+Work Log:
+- Rewrote mini-services/tick-feed/index.ts to use Deriv WebSocket API (wss://ws.derivws.com/websockets/v3?app_id=1089)
+- Connected to 37 Deriv symbols: 10 Synthetic Indices, 5 1-Second Indices, 2 Crash/Boom, 1 Step, 5 Jump, 18 Forex, 2 Commodities
+- Subscribes to tick streams and requests 100-tick history for each symbol
+- Added uncaughtException/unhandledRejection handlers for process stability
+- Updated src/lib/trading-types.ts: ALL_SYMBOLS now uses Deriv symbols (R_10 through R_100, 1HZ10V-1HZ100V, CRASH300N, BOOM300N, stpRNG, JD10-JD100, frxEURUSD-frxGBPCAD, frxXAUUSD, frxXAGUSD)
+- Updated SYMBOL_CATEGORIES: Synthetic Indices, 1-Second Indices, Crash/Boom, Step/Jump, Forex, Commodities
+- Added `deriv` and `tv` fields to SymbolItem type for mapping Deriv → TradingView chart symbols
+- Updated src/stores/trading-store.ts: default symbol changed from BINANCE:BTCUSDT to R_100, watchlist updated
+- Updated src/app/page.tsx: LIVE_STRIP_SYMBOLS now shows Volatility indices, Crash/Boom, forex pairs
+- Updated src/components/analysis/analysis-panel.tsx: shows "Live from Deriv" label
+- Fixed CRASH300/BOOM300 → CRASH300N/BOOM300N (correct Deriv symbol names)
+- Fixed last digit extraction: Math.floor(price) % 10 (integer part last digit)
+
+Stage Summary:
+- 37 Deriv symbols connected via WebSocket with real tick data
+- Live prices: R_100=366.99, EUR/USD=1.1578, 1HZ10V=10173.26, CRASH300N=1846.87
+- Last digit extraction uses integer part: Math.floor(price) % 10
+- All symbols have 100+ historical ticks for digit analysis
+- Forex pairs (EUR/USD, GBP/USD, USD/JPY, etc.) available during market hours
+- Synthetic indices (R_10-R_100) and 1-Second indices (1HZ10V-1HZ100V) available 24/7
+- Gold/Silver (frxXAUUSD, frxXAGUSD) available during market hours
+- Proxy API verified working at /api/tick-feed?path=...
+
+

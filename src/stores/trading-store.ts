@@ -47,7 +47,7 @@ interface TradingStore {
 }
 
 export const useTradingStore = create<TradingStore>((set) => ({
-  activeSymbol: 'BINANCE:BTCUSDT',
+  activeSymbol: 'R_100',
   activeTab: 'even_odd',
   timeframe: '15',
   theme: 'dark',
@@ -83,11 +83,14 @@ export const useTradingStore = create<TradingStore>((set) => ({
   clearAccumulator: () => set({ accumulatorLegs: [] }),
 
   watchlist: [
-    'BINANCE:BTCUSDT',
-    'BINANCE:ETHUSDT',
-    'FX:EURUSD',
-    'NASDAQ:AAPL',
-    'FX:XAUUSD',
+    'R_100',
+    'R_50',
+    '1HZ10V',
+    '1HZ100V',
+    'frxEURUSD',
+    'frxXAUUSD',
+    'CRASH300N',
+    'BOOM300N',
   ],
   addToWatchlist: (symbol) =>
     set((s) => {
