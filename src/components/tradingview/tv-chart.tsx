@@ -108,7 +108,6 @@ export function TvChart({
         script.parentNode.removeChild(script)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, theme, interval, studies, containerId])
 
   return (

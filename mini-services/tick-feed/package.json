@@ -2,7 +2,7 @@
   "name": "tick-feed",
   "version": "1.0.0",
   "scripts": {
-    "dev": "bun --hot index.ts"
+    "dev": "bash run.sh"
   },
   "dependencies": {
     "socket.io": "^4.7.0",
@@ -10,5 +10,6 @@
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"
-  }
+  },
+  "type": "module"
 }

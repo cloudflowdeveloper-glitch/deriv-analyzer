@@ -100,6 +100,8 @@ export default function TradingAnalysisPage() {
   } = useTradingStore()
 
   const currentSymbol = ALL_SYMBOLS.find(s => s.symbol === activeSymbol)
+  // Use TradingView-compatible symbol for charts (e.g., DERIV:R_100, FX:EURUSD)
+  const tvSymbol = currentSymbol?.tv || activeSymbol
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -209,7 +211,7 @@ export default function TradingAnalysisPage() {
                   <div className="lg:col-span-3">
                     <Card className="border-border/50">
                       <CardContent className="p-0">
-                        <TvChart symbol={activeSymbol} theme={theme} interval={timeframe} height={420} />
+                        <TvChart symbol={tvSymbol} theme={theme} interval={timeframe} height={420} />
                       </CardContent>
                     </Card>
                   </div>
@@ -232,7 +234,7 @@ export default function TradingAnalysisPage() {
                 <div className="lg:col-span-3">
                   <Card className="border-border/50">
                     <CardContent className="p-0">
-                      <TvChart symbol={activeSymbol} theme={theme} interval={timeframe} height={520} />
+                      <TvChart symbol={tvSymbol} theme={theme} interval={timeframe} height={520} />
                     </CardContent>
                   </Card>
                 </div>
@@ -242,7 +244,7 @@ export default function TradingAnalysisPage() {
                       <CardTitle className="text-xs">Technical Analysis</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <TvTechnicalAnalysis symbol={activeSymbol} colorTheme={theme} isTransparent={true} />
+                      <TvTechnicalAnalysis symbol={tvSymbol} colorTheme={theme} isTransparent={true} />
                     </CardContent>
                   </Card>
                 </div>
@@ -281,7 +283,7 @@ export default function TradingAnalysisPage() {
                     <CardTitle className="text-xs">{currentSymbol?.name || activeSymbol} — Technicals</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0" style={{ height: 380 }}>
-                    <TvTechnicalAnalysis symbol={activeSymbol} colorTheme={theme} isTransparent={true} />
+                    <TvTechnicalAnalysis symbol={tvSymbol} colorTheme={theme} isTransparent={true} />
                   </CardContent>
                 </Card>
               </div>

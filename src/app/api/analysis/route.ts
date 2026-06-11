@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { MarketType, SignalType, IndicatorResult, AnalysisSignal } from '@/lib/trading-types'
+import { initDerivTicks, getDigitAnalysis, resolveSymbol } from '@/lib/deriv-ticks'
 
-interface TickPrice {
-  price: number
-  lastDigit: number
-  timestamp: number
+// Initialize tick service
+let initCalled = false
+function ensureInit() {
+  if (!initCalled) {
+    initCalled = true
+    setImmediate(() => initDerivTicks())
+  }
 }
 
 interface DigitData {
@@ -27,34 +31,16 @@ interface DigitData {
   priceChange: number
   priceChangePercent: number
   tickSpeed: number
-  recentTicks: TickPrice[]
+  recentTicks: Array<{ price: number; timestamp: number; lastDigit: number }>
   totalTicks: number
 }
 
-// Fetch real digit data from tick-feed service
-async function fetchDigitData(symbol: string, barrier: number = 4): Promise<DigitData | null> {
-  try {
-    const res = await fetch(`http://localhost:3004/api/digits?symbol=${encodeURIComponent(symbol)}&barrier=${barrier}`, {
-      signal: AbortSignal.timeout(3000)
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-// Fetch real price from tick-feed service
-async function fetchPrice(symbol: string): Promise<{ price: number; lastDigit: number } | null> {
-  try {
-    const res = await fetch(`http://localhost:3004/api/price?symbol=${encodeURIComponent(symbol)}`, {
-      signal: AbortSignal.timeout(3000)
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+// Fetch digit data from in-process tick service
+function fetchDigitData(symbol: string, barrier: number = 4): DigitData | null {
+  ensureInit()
+  const resolvedId = resolveSymbol(symbol)
+  if (!resolvedId) return null
+  return getDigitAnalysis(resolvedId, barrier)
 }
 
 function generateIndicators(digitData: DigitData | null, symbol: string, marketType: MarketType, barrier?: number): IndicatorResult[] {
@@ -211,18 +197,17 @@ function getPayoutForMarket(marketType: MarketType, confidence: number, stake: n
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const symbol = searchParams.get('symbol') || 'BINANCE:BTCUSDT'
+  const symbol = searchParams.get('symbol') || 'R_100'
   const marketType = searchParams.get('marketType') || 'even_odd'
   const stake = parseFloat(searchParams.get('stake') || '10')
   const multiplier = searchParams.get('multiplier') ? parseFloat(searchParams.get('multiplier')!) : undefined
   const barrier = searchParams.get('barrier') ? parseFloat(searchParams.get('barrier')!) : undefined
 
-  // Fetch real tick data
-  const digitData = await fetchDigitData(symbol, barrier ?? 4)
-  const priceData = await fetchPrice(symbol)
+  // Fetch real tick data from in-process service
+  const digitData = fetchDigitData(symbol, barrier ?? 4)
 
-  const price = digitData?.currentPrice || priceData?.price || 0
-  const lastDigit = digitData?.lastDigit ?? priceData?.lastDigit ?? Math.floor(Math.random() * 10)
+  const price = digitData?.currentPrice || 0
+  const lastDigit = digitData?.lastDigit ?? Math.floor(Math.random() * 10)
 
   const indicators = generateIndicators(digitData, symbol, marketType as MarketType, barrier)
   const { signal, confidence } = calculateSignal(indicators)
