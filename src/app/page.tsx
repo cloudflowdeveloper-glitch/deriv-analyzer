@@ -1,6 +1,7 @@
 'use client'
 
 import { useTradingStore } from '@/stores/trading-store'
+import { useTickStore } from '@/stores/tick-store'
 import { MarketType, MARKET_TYPES, ALL_SYMBOLS, TIMEFRAMES } from '@/lib/trading-types'
 import { AnalysisPanel } from '@/components/analysis/analysis-panel'
 import { AccumulatorPanel } from '@/components/analysis/accumulator-panel'
@@ -11,11 +12,13 @@ import { TvMarketOverview } from '@/components/tradingview/tv-market-overview'
 import { TvScreener } from '@/components/tradingview/tv-screener'
 import { TvEconomicCalendar } from '@/components/tradingview/tv-economic-calendar'
 import { SymbolSearch } from '@/components/tradingview/symbol-search'
+import { LivePriceDisplay } from '@/components/ticks/digit-analysis'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -37,6 +40,59 @@ const MARKET_TABS: Array<{ value: MarketType | 'chart' | 'dashboard' | 'accumula
   { value: 'dashboard', label: 'Overview', icon: <Monitor className="h-4 w-4" /> },
 ]
 
+// Top crypto symbols to show in live price strip
+const LIVE_STRIP_SYMBOLS = [
+  'BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT',
+  'BINANCE:BNBUSDT', 'BINANCE:XRPUSDT', 'BINANCE:DOGEUSDT',
+  'BINANCE:ADAUSDT', 'BINANCE:AVAXUSDT', 'BINANCE:DOTUSDT',
+  'BINANCE:LINKUSDT',
+]
+
+function LivePriceStrip() {
+  const livePrices = useTickStore((s) => s.livePrices)
+  const connected = useTickStore((s) => s.connected)
+  const allPrices = useTickStore((s) => s.allPrices)
+
+  // Use store livePrices which update in real-time
+  const prices = LIVE_STRIP_SYMBOLS.map(sym => ({
+    symbol: sym,
+    ...livePrices[sym],
+    name: ALL_SYMBOLS.find(s => s.symbol === sym)?.name || sym.split(':').pop(),
+  })).filter(p => p.price !== undefined)
+
+  if (prices.length === 0) return null
+
+  return (
+    <div className="border-b border-border/30 bg-muted/10">
+      <ScrollArea className="w-full">
+        <div className="flex items-center gap-3 px-3 py-1 min-w-max">
+          {connected && (
+            <div className="flex items-center gap-1 shrink-0">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-wider">Live</span>
+            </div>
+          )}
+          {prices.map(p => (
+            <div key={p.symbol} className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[9px] text-muted-foreground font-medium">{p.name}</span>
+              <span className="text-[10px] font-mono font-bold">
+                {p.price >= 1000 ? p.price.toFixed(2) : p.price >= 1 ? p.price.toFixed(4) : p.price.toFixed(6)}
+              </span>
+              <span className={cn(
+                'text-[8px] font-mono font-medium',
+                (p.changePercent || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+              )}>
+                {(p.changePercent || 0) >= 0 ? '▲' : '▼'}{Math.abs(p.changePercent || 0).toFixed(2)}%
+              </span>
+            </div>
+          ))}
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
+  )
+}
+
 export default function TradingAnalysisPage() {
   const {
     activeSymbol, activeTab, timeframe, theme,
@@ -53,6 +109,9 @@ export default function TradingAnalysisPage() {
         <TvTicker colorTheme={theme} />
       </div>
 
+      {/* Live Price Strip */}
+      <LivePriceStrip />
+
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="px-3 sm:px-4">
@@ -64,7 +123,7 @@ export default function TradingAnalysisPage() {
               </div>
               <div className="hidden sm:block">
                 <h1 className="text-xs font-bold leading-tight">Deriv Analyzer</h1>
-                <p className="text-[9px] text-muted-foreground">{ALL_SYMBOLS.length} markets • Synthetic trading</p>
+                <p className="text-[9px] text-muted-foreground">{ALL_SYMBOLS.length} markets • Live data</p>
               </div>
               <Separator orientation="vertical" className="h-6 mx-0.5 hidden sm:block" />
               <SymbolSearch
@@ -82,8 +141,9 @@ export default function TradingAnalysisPage() {
               </Select>
             </div>
 
-            {/* Right */}
+            {/* Right - Live Price */}
             <div className="flex items-center gap-1.5">
+              <LivePriceDisplay tvSymbol={activeSymbol} />
               {currentSymbol && (
                 <Badge variant="outline" className="text-[9px] hidden md:inline-flex border-border/50">
                   <span className="font-mono">{currentSymbol.category}</span>
@@ -235,7 +295,7 @@ export default function TradingAnalysisPage() {
       <footer className="border-t border-border/50 bg-background mt-auto">
         <div className="px-3 sm:px-4 py-2">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[9px] text-muted-foreground">
-            <p>Deriv Analyzer • {ALL_SYMBOLS.length} markets • Synthetic trading analysis</p>
+            <p>Deriv Analyzer • {ALL_SYMBOLS.length} markets • Live Binance data • Tick-by-tick analysis</p>
             <p>⚠ For educational purposes only. Not financial advice.</p>
           </div>
         </div>

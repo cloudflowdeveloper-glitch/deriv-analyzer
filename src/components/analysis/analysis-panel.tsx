@@ -3,7 +3,9 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTradingStore } from '@/stores/trading-store'
+import { useTickStore } from '@/stores/tick-store'
 import { MarketType, MARKET_TYPES, SIGNAL_COLORS, ALL_SYMBOLS, SYMBOL_CATEGORIES, AnalysisSignal, TICK_DURATIONS, TIME_DURATIONS, Duration } from '@/lib/trading-types'
+import { DigitBar, LastDigitDisplay, LivePriceDisplay, DigitStats, RecentTicks } from '@/components/ticks/digit-analysis'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Activity, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Layers, ChevronUp, ChevronDown, Clock, Hash, DollarSign,
-  Target, AlertTriangle, Zap, BarChart3
+  Target, Zap, BarChart3, Wifi, WifiOff
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,6 +34,11 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
     accumulatorLegs, addLeg
   } = useTradingStore()
 
+  // Live tick data
+  const digitAnalysis = useTickStore((s) => s.digitAnalyses[activeSymbol])
+  const connected = useTickStore((s) => s.connected)
+  const livePrice = useTickStore((s) => s.livePrices[activeSymbol])
+
   const [sortBy, setSortBy] = useState<'confidence' | 'returnPercent'>('confidence')
   const [selectedCategory, setSelectedCategory] = useState<string>('crypto')
 
@@ -40,13 +47,23 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
     return cat ? cat.symbols.slice(0, 10) : SYMBOL_CATEGORIES[0].symbols.slice(0, 10)
   }, [selectedCategory])
 
-  // Fetch active symbol analysis
+  // Determine highlight mode for digit bar
+  const highlightMode = useMemo(() => {
+    switch (marketType) {
+      case 'even_odd': return selectedPrediction === 'Even' ? 'even' as const : 'odd' as const
+      case 'differs': return 'differs' as const
+      case 'over_under': return selectedPrediction === 'Over' ? 'over' as const : 'under' as const
+      default: return 'even' as const
+    }
+  }, [marketType, selectedPrediction])
+
+  // Fetch active symbol analysis (uses real tick data in backend)
   const { data: analysis, isLoading } = useQuery({
     queryKey: ['analysis', activeSymbol, marketType, stake, multiplier, barrier],
     queryFn: async () => {
       const params = new URLSearchParams({ symbol: activeSymbol, marketType, stake: String(stake) })
       if (multiplier) params.set('multiplier', String(multiplier))
-      if (barrier) params.set('barrier', String(barrier))
+      if (barrier !== undefined) params.set('barrier', String(barrier))
       const res = await fetch(`/api/analysis?${params}`)
       return res.json() as Promise<AnalysisSignal>
     },
@@ -78,21 +95,80 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
   const isInAccumulator = (symbol: string) => accumulatorLegs.some(l => l.symbol === symbol && l.marketType === marketType)
   const isBuy = analysis?.signal === 'buy' || analysis?.signal === 'strong_buy'
 
+  // Use live price if available, otherwise fall back to analysis data
+  const displayPrice = livePrice?.price || analysis?.entryPrice || 0
+  const displayDigit = livePrice?.lastDigit ?? analysis?.lastDigit ?? digitAnalysis?.lastDigit ?? 0
+
   return (
     <div className="space-y-3">
-      {/* ── Contract Header ── */}
-      <div className="flex items-center gap-2">
-        <div className={cn('h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold', config.bg, config.color)}>
-          {config.label.charAt(0)}
+      {/* ── Live Price Header ── */}
+      <Card className="border-border/50 overflow-hidden">
+        <div className="px-3 py-2 flex items-center justify-between bg-muted/20">
+          <div className="flex items-center gap-2">
+            <div className={cn('h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold', config.bg, config.color)}>
+              {config.label.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className={cn('text-sm font-bold', config.color)}>{config.label}</p>
+                <LivePriceDisplay tvSymbol={activeSymbol} />
+              </div>
+              <p className="text-[10px] text-muted-foreground truncate">{activeSymbol.split(':').pop()}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {connected ? (
+              <Badge variant="outline" className="text-[8px] border-emerald-500/30 text-emerald-400 gap-1">
+                <Wifi className="h-2.5 w-2.5" />
+                LIVE
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[8px] border-muted-foreground/30 text-muted-foreground gap-1">
+                <WifiOff className="h-2.5 w-2.5" />
+                OFFLINE
+              </Badge>
+            )}
+            <Badge variant="outline" className={cn('text-[9px]', config.borderColor, config.bg, config.color)}>
+              {config.shortDesc}
+            </Badge>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className={cn('text-sm font-bold', config.color)}>{config.label}</p>
-          <p className="text-[10px] text-muted-foreground truncate">{activeSymbol.split(':').pop()}</p>
-        </div>
-        <Badge variant="outline" className={cn('text-[9px]', config.borderColor, config.bg, config.color)}>
-          {config.shortDesc}
-        </Badge>
-      </div>
+
+        {/* Live Digit Display + Stats */}
+        {digitAnalysis && (
+          <CardContent className="p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <LastDigitDisplay analysis={digitAnalysis} size="lg" />
+              <div className="text-right">
+                <p className="text-[9px] text-muted-foreground">Live Price</p>
+                <p className="text-lg font-bold font-mono">
+                  {displayPrice >= 10000 ? displayPrice.toFixed(2) : displayPrice >= 1 ? displayPrice.toFixed(4) : displayPrice.toFixed(6)}
+                </p>
+                <p className={cn(
+                  'text-[10px] font-mono',
+                  (digitAnalysis.priceChangePercent || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                )}>
+                  {(digitAnalysis.priceChangePercent || 0) >= 0 ? '+' : ''}{(digitAnalysis.priceChangePercent || 0).toFixed(4)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Digit Frequency Bar */}
+            <DigitBar
+              analysis={digitAnalysis}
+              highlight={highlightMode}
+              barrier={barrier}
+              differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined}
+            />
+
+            {/* Quick Stats */}
+            <DigitStats analysis={digitAnalysis} marketType={marketType} barrier={barrier} differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined} />
+
+            {/* Recent Ticks */}
+            <RecentTicks analysis={digitAnalysis} />
+          </CardContent>
+        )}
+      </Card>
 
       {/* ── Prediction Selector ── */}
       <Card className={cn('border', config.borderColor, config.bg)}>
@@ -215,7 +291,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
           <CardContent className="p-4 flex items-center justify-center">
             <div className="animate-pulse flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-[11px] text-muted-foreground">Analyzing...</span>
+              <span className="text-[11px] text-muted-foreground">Analyzing live data...</span>
             </div>
           </CardContent>
         </Card>
@@ -242,19 +318,22 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
           </div>
 
           <CardContent className="p-3 space-y-3">
-            {/* Last Digit Display */}
+            {/* Entry Price + Last Digit + Probability */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-muted-foreground">Entry Price</p>
-                <p className="text-lg font-bold font-mono tracking-tight">{analysis.entryPrice.toFixed(2)}</p>
+                <p className="text-lg font-bold font-mono tracking-tight">{displayPrice.toFixed(2)}</p>
+                {livePrice && (
+                  <p className="text-[8px] text-emerald-400">● Live from Binance</p>
+                )}
               </div>
               <div className="text-center">
                 <p className="text-[10px] text-muted-foreground">Last Digit</p>
                 <div className={cn(
                   'h-10 w-10 rounded-lg flex items-center justify-center text-lg font-bold',
-                  analysis.lastDigit % 2 === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                  displayDigit % 2 === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                 )}>
-                  {analysis.lastDigit}
+                  {displayDigit}
                 </div>
               </div>
               <div className="text-right">
@@ -374,7 +453,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                 odds: 1 + analysis.riskReward * 0.5,
                 stake,
                 payout: parseFloat((stake * analysis.returnPercent / 100 + stake).toFixed(2)),
-                entryPrice: analysis.entryPrice,
+                entryPrice: displayPrice,
                 target: analysis.target,
                 barrier: analysis.barrier,
                 duration,
@@ -424,6 +503,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                 const sym = ALL_SYMBOLS.find(s => s.symbol === a.symbol)
                 const inAcc = isInAccumulator(a.symbol)
                 const aIsBuy = a.signal === 'buy' || a.signal === 'strong_buy'
+                const symLivePrice = useTickStore.getState().livePrices[a.symbol]
 
                 return (
                   <div key={a.symbol} className="flex items-center justify-between p-2 rounded-md hover:bg-accent/30 transition-colors group">
@@ -436,7 +516,13 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                         <p className="text-[11px] font-medium truncate">{sym?.name || a.symbol.split(':').pop()}</p>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] text-muted-foreground">{sym?.exchange}</span>
-                          <span className="text-[9px] text-muted-foreground">D{a.lastDigit}</span>
+                          {symLivePrice ? (
+                            <span className="text-[9px] font-mono text-emerald-400">
+                              D{symLivePrice.lastDigit} ● {symLivePrice.price >= 1 ? symLivePrice.price.toFixed(2) : symLivePrice.price.toFixed(6)}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground">D{a.lastDigit}</span>
+                          )}
                         </div>
                       </div>
                     </div>
