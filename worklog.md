@@ -1,26 +1,30 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Create a comprehensive market analysis tool for Even/Odd, Differs, Over/Under, Accumulators, Multipliers, Higher/Lower, Turbos, and Live Market analysis
+Task: Rebuild market analysis tool as TradingView-powered trading analysis tool
 
 Work Log:
-- Planned architecture: Next.js 16 frontend + WebSocket mini-service + API routes + Prisma DB
-- Updated Prisma schema with MarketEvent, Market, MarketAnalysis, and AnalysisHistory models
-- Created WebSocket mini-service (port 3003) for real-time market data simulation with 12 sport events across Football, Basketball, Tennis, and Boxing
-- Built Zustand store for state management (events, filters, accumulator legs, connection status)
-- Created custom useMarketSocket hook for WebSocket connection management
-- Built complete dashboard view with stats cards, bar charts, pie charts, live events list, and top picks
-- Built individual market type views (Even/Odd, Differs, Over/Under, Multipliers, Higher/Lower, Turbos) with sorting, search, analysis panels, and accumulator add functionality
-- Built accumulator builder with combined odds calculation, API-powered analysis, stake simulation, signal breakdown
-- Created API routes: GET /api/analysis (market-specific analysis insights), POST /api/analysis/accumulator (accumulator analysis with Kelly criterion)
-- Fixed lint errors (NotEqual icon not found in lucide-react → replaced with Unlink, setState-in-effect → useMemo)
-- Added responsive design, sticky footer, proper semantic HTML
+- Planned architecture: TradingView widget integration + custom analysis API + Zustand store
+- Created 7 TradingView widget wrapper components (tv-chart, tv-ticker, tv-technical-analysis, tv-screener, tv-market-overview, tv-symbol-info, tv-economic-calendar)
+- Built trading analysis API with POST batch analysis and GET single symbol analysis
+- Built accumulator analysis API with Kelly criterion and risk assessment
+- Created Zustand store for symbol selection, timeframe, theme, watchlist, accumulator legs
+- Built AnalysisPanel component with per-market-type indicators and signal generation
+- Built AccumulatorPanel with combined odds, stake simulation, and risk analysis
+- Built main page with 9 tabs: Chart, Dashboard, Even/Odd, Differs, Over/Under, Multipliers, Higher/Lower, Turbos, Accumulators
+- Added scrolling ticker tape with live prices from TradingView
+- Added symbol selector (16 symbols across crypto, forex, stocks, commodities)
+- Added timeframe selector (1m to 1W)
+- Added dark/light theme toggle affecting all TradingView widgets
+- Verified with Agent Browser: page loaded with all TradingView widgets rendering, live prices visible
 
 Stage Summary:
-- Full market analysis dashboard with 8 tabs (Dashboard + 6 market types + Accumulators)
-- Real-time WebSocket feed simulating live market data with 12 events
-- Interactive market tables with sorting, search, and add-to-accumulator
-- Accumulator builder with combined odds, risk analysis, stake simulation
-- Charts and visualizations (bar charts, pie charts) using Recharts
-- Analysis API with insights, recommendations, risk levels per market type
-- Sticky footer, responsive design, professional UI with shadcn/ui
+- 7 TradingView widget components in /src/components/tradingview/
+- 2 analysis components in /src/components/analysis/
+- 2 API routes (/api/analysis GET+POST, /api/analysis/accumulator POST)
+- 1 Zustand store (/src/stores/trading-store.ts)
+- Trading types and constants (/src/lib/trading-types.ts)
+- Complete trading analysis dashboard with 9 tabs
+- Live TradingView data: ticker tape, charts, technical analysis, screener, economic calendar
+- Per-market-type analysis with custom indicators for each type
+- Accumulator builder with Kelly criterion and stake simulation
