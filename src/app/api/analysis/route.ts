@@ -94,10 +94,11 @@ function generateIndicators(digitData: DigitData | null, symbol: string, marketT
       }
       case 'multiplier': {
         return [
+          { name: 'Direction', value: digitData.priceChange >= 0 ? '▲ Bullish' : '▼ Bearish', signal: digitData.priceChange > 0 ? 'buy' : digitData.priceChange < 0 ? 'sell' : 'neutral', description: 'Price direction over analysis window' },
           { name: 'Volatility', value: `${Math.abs(digitData.priceChangePercent).toFixed(3)}%`, signal: Math.abs(digitData.priceChangePercent) > 0.05 ? 'strong_buy' : Math.abs(digitData.priceChangePercent) > 0.02 ? 'buy' : 'neutral', description: 'Price volatility for multiplier risk' },
           { name: 'Tick Speed', value: `${digitData.tickSpeed} t/s`, signal: digitData.tickSpeed > 3 ? 'buy' : digitData.tickSpeed < 0.5 ? 'sell' : 'neutral', description: 'Active market indicator' },
           { name: 'Range Spread', value: `${digitData.highPrice !== digitData.lowPrice ? ((digitData.highPrice - digitData.lowPrice) / digitData.currentPrice * 100).toFixed(3) : '0'}%`, signal: digitData.highPrice > digitData.lowPrice * 1.001 ? 'buy' : 'sell', description: 'High-low spread as volatility' },
-          { name: 'Direction', value: digitData.priceChange >= 0 ? 'Bullish' : 'Bearish', signal: digitData.priceChange > 0 ? 'buy' : 'sell', description: 'Overall price direction' },
+          { name: 'Up/Down Ratio', value: digitData.priceChange > 0 ? 'Up' : 'Down', signal: digitData.priceChange > 0 ? 'buy' : 'sell', description: 'Price movement direction for Up/Down prediction' },
         ]
       }
     }

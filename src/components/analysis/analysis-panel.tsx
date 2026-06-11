@@ -45,7 +45,7 @@ function PredictionCard({ prediction, marketType, config }: {
 }) {
   if (!prediction) return null
 
-  const isPositive = ['Even', 'Over', 'Differs'].includes(prediction.prediction)
+  const isPositive = ['Even', 'Over', 'Differs', 'Up', 'Rise', 'Higher'].includes(prediction.prediction)
   const confidenceLevel = prediction.confidence >= 75 ? 'high' : prediction.confidence >= 55 ? 'medium' : 'low'
   const confidenceColor = {
     high: 'text-emerald-400',
@@ -97,6 +97,12 @@ function PredictionCard({ prediction, marketType, config }: {
                prediction.prediction === 'Under' ? 'UN↓' :
                prediction.prediction === 'Differs' ? '≠' :
                prediction.prediction === 'Matches' ? '=' :
+               prediction.prediction === 'Up' ? '▲' :
+               prediction.prediction === 'Down' ? '▼' :
+               prediction.prediction === 'Rise' ? '▲' :
+               prediction.prediction === 'Fall' ? '▼' :
+               prediction.prediction === 'Higher' ? '▲' :
+               prediction.prediction === 'Lower' ? '▼' :
                prediction.prediction.slice(0, 3).toUpperCase()}
             </div>
             <div>
@@ -129,36 +135,70 @@ function PredictionCard({ prediction, marketType, config }: {
           />
         </div>
 
-        {/* Recent digits used for prediction */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[8px] text-muted-foreground shrink-0">Last {prediction.tickCount}:</span>
-          <div className="flex gap-0.5">
-            {prediction.recentDigits.map((d, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold',
-                  d === prediction.lastDigit
-                    ? 'bg-primary text-primary-foreground ring-1 ring-primary/30'
-                    : d % 2 === 0
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'bg-rose-500/20 text-rose-400'
-                )}
-              >
-                {d}
+        {/* Recent data used for prediction */}
+        {(marketType === 'multiplier' || marketType === 'higher_lower' || marketType === 'turbo') ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] text-muted-foreground shrink-0">Last {prediction.tickCount} ticks:</span>
+            <div className="flex gap-0.5">
+              {prediction.recentDigits.map((d, i) => {
+                const isUp = i > 0 ? d > prediction.recentDigits[i - 1] : false
+                const isDown = i > 0 ? d < prediction.recentDigits[i - 1] : false
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold',
+                      isUp ? 'bg-emerald-500/20 text-emerald-400' :
+                      isDown ? 'bg-rose-500/20 text-rose-400' :
+                      'bg-muted/30 text-muted-foreground'
+                    )}
+                  >
+                    {isUp ? '▲' : isDown ? '▼' : '—'}
+                  </div>
+                )
+              })}
+              <div className="flex items-center justify-center h-5 w-5">
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
               </div>
-            ))}
-            <div className="flex items-center justify-center h-5 w-5">
-              <ArrowRight className="h-3 w-3 text-muted-foreground" />
-            </div>
-            <div className={cn(
-              'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold animate-pulse',
-              isPositive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-rose-500/30 text-rose-300'
-            )}>
-              ?
+              <div className={cn(
+                'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold animate-pulse',
+                isPositive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-rose-500/30 text-rose-300'
+              )}>
+                {isPositive ? '▲' : '▼'}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] text-muted-foreground shrink-0">Last {prediction.tickCount}:</span>
+            <div className="flex gap-0.5">
+              {prediction.recentDigits.map((d, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold',
+                    d === prediction.lastDigit
+                      ? 'bg-primary text-primary-foreground ring-1 ring-primary/30'
+                      : d % 2 === 0
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-rose-500/20 text-rose-400'
+                  )}
+                >
+                  {d}
+                </div>
+              ))}
+              <div className="flex items-center justify-center h-5 w-5">
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+              </div>
+              <div className={cn(
+                'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold animate-pulse',
+                isPositive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-rose-500/30 text-rose-300'
+              )}>
+                ?
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Streak info */}
         {prediction.streakInfo && (
@@ -172,6 +212,30 @@ function PredictionCard({ prediction, marketType, config }: {
         <p className="text-[9px] text-muted-foreground leading-relaxed italic">
           {prediction.reasoning}
         </p>
+
+        {/* For Multiplier: show Up vs Down comparison */}
+        {marketType === 'multiplier' && (
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className={cn(
+              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+              prediction.prediction === 'Up'
+                ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                : 'bg-muted/30 text-muted-foreground'
+            )}>
+              {prediction.prediction === 'Up' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+              Up
+            </div>
+            <div className={cn(
+              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+              prediction.prediction === 'Down'
+                ? 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-500/30'
+                : 'bg-muted/30 text-muted-foreground'
+            )}>
+              {prediction.prediction === 'Down' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+              Down
+            </div>
+          </div>
+        )}
 
         {/* For Differs: show Match vs Differs comparison */}
         {marketType === 'differs' && (
@@ -383,7 +447,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
       </Card>
 
       {/* ── PREDICTION CARD ── */}
-      {(marketType === 'even_odd' || marketType === 'differs' || marketType === 'over_under') && (
+      {(marketType === 'even_odd' || marketType === 'differs' || marketType === 'over_under' || marketType === 'multiplier' || marketType === 'higher_lower' || marketType === 'turbo') && (
         <PredictionCard
           prediction={prediction}
           marketType={marketType}

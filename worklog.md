@@ -73,3 +73,32 @@ Stage Summary:
 - Fixed critical digit extraction bug that affected ALL analysis panels
 - Changed from integer-based extraction to decimal-based extraction using pipSize
 - All 37 symbols across 7 categories now show correct last digits
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Update Multipliers tab to use Up/Down predictions instead of x2/x5/x10...
+
+Work Log:
+- Changed `MARKET_TYPES.multiplier.predictions` from `['x2','x5','x10','x20','x50','x100','x250','x500']` to `['Up','Down']`
+- Added direction-based prediction engine in `deriv-ticks.ts getPrediction()`:
+  - Handles `multiplier` (Up/Down), `higher_lower` (Rise/Fall), and `turbo` (Higher/Lower)
+  - Uses price direction analysis: counts up/down ticks, calculates change%, detects direction streaks
+  - Regression-to-mean strategy: if more ticks went up, predict Down (and vice versa)
+  - Streak break override: 3+ consecutive same-direction ticks boost break prediction
+  - For direction market types, returns prices instead of digits in `recentDigits` field
+- Updated `analysis-panel.tsx`:
+  - Added `multiplier`, `higher_lower`, `turbo` to prediction card visibility
+  - Updated `isPositive` check to include Up/Rise/Higher as positive
+  - Added direction arrow icons (▲/▼) for prediction display
+  - For direction tabs, shows price movement arrows instead of digit numbers in recent history
+  - Added Up vs Down comparison card for multiplier tab (like Differs has Match/Differs)
+- Updated `analysis/route.ts` multiplier indicators: Direction (▲ Bullish/▼ Bearish), Volatility, Tick Speed, Range Spread, Up/Down Ratio
+- Verified via API: multiplier returns Up/Down predictions with price history
+- Verified via browser: Multiplier, Rise/Fall, Turbo tabs all show AI predictions with direction analysis
+
+Stage Summary:
+- Multiplier tab now uses Up/Down predictions matching Deriv's actual multiplier trading
+- All 3 direction-based tabs (Multiplier, Rise/Fall, Turbo) have AI prediction cards
+- Direction arrows (▲/▼) show price movement in prediction history
+- Multiplier tab shows Up vs Down comparison with checkmark/X indicators

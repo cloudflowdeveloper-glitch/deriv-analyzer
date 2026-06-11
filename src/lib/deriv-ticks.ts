@@ -407,6 +407,86 @@ export function getPrediction(id: string, marketType: string, barrier: number = 
     }
   }
 
+  else if (marketType === 'multiplier' || marketType === 'higher_lower' || marketType === 'turbo') {
+    // Price direction prediction (Up/Down or Rise/Fall or Higher/Lower)
+    const prices = recent.map(t => t.price)
+    const n = prices.length
+
+    // Calculate directional momentum from recent ticks
+    let upTicks = 0
+    let downTicks = 0
+    for (let i = 1; i < n; i++) {
+      if (prices[i] > prices[i - 1]) upTicks++
+      else if (prices[i] < prices[i - 1]) downTicks++
+    }
+
+    // Price change over the window
+    const priceChange = prices[n - 1] - prices[0]
+    const changePercent = prices[0] !== 0 ? (priceChange / prices[0]) * 100 : 0
+
+    // Direction streak
+    let dirStreak = 0
+    let dirStreakType = 'neutral'
+    for (let i = n - 1; i >= 1; i--) {
+      const diff = prices[i] - prices[i - 1]
+      if (diff > 0) {
+        if (dirStreakType === 'up') dirStreak++
+        else { dirStreakType = 'up'; dirStreak = 1; }
+      } else if (diff < 0) {
+        if (dirStreakType === 'down') dirStreak++
+        else { dirStreakType = 'down'; dirStreak = 1; }
+      } else break
+    }
+
+    const streakInfo = dirStreak >= 2 ? `${dirStreak} consecutive ${dirStreakType}` : 'No direction streak'
+
+    if (marketType === 'multiplier') {
+      // Predict the likely direction
+      if (upTicks > downTicks) {
+        prediction = 'Down'
+        confidence = Math.min(50 + upTicks * 8, 85)
+        probability = Math.min(55 + upTicks * 5, 80)
+        reasoning = `${n} ticks: ${upTicks} up, ${downTicks} down. Change: ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(4)}%. Regression predicts down.`
+      } else if (downTicks > upTicks) {
+        prediction = 'Up'
+        confidence = Math.min(50 + downTicks * 8, 85)
+        probability = Math.min(55 + downTicks * 5, 80)
+        reasoning = `${n} ticks: ${upTicks} up, ${downTicks} down. Change: ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(4)}%. Regression predicts up.`
+      } else {
+        prediction = priceChange >= 0 ? 'Down' : 'Up'
+        confidence = 52
+        probability = 52
+        reasoning = `Ticks balanced. ${changePercent >= 0 ? 'Bullish' : 'Bearish'} drift (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(4)}%). Weak ${prediction.toLowerCase()} signal.`
+      }
+
+      // Streak break override
+      if (dirStreak >= 3) {
+        const breakDir = dirStreakType === 'up' ? 'Down' : 'Up'
+        prediction = breakDir
+        confidence = Math.min(confidence + dirStreak * 5, 92)
+        probability = Math.min(probability + dirStreak * 3, 85)
+        reasoning += ` Streak break likely after ${dirStreak} consecutive ${dirStreakType} moves.`
+      }
+    } else if (marketType === 'higher_lower') {
+      prediction = priceChange >= 0 ? 'Rise' : 'Fall'
+      const dir = priceChange >= 0 ? 'rise' : 'fall'
+      confidence = Math.min(50 + Math.abs(changePercent) * 100, 78)
+      probability = Math.min(55 + Math.abs(changePercent) * 80, 75)
+      reasoning = `${n} ticks: ${upTicks} up, ${downTicks} down. ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(4)}%. Predicting ${dir}.`
+    } else {
+      // turbo
+      prediction = priceChange >= 0 ? 'Higher' : 'Lower'
+      const dir = priceChange >= 0 ? 'higher' : 'lower'
+      confidence = Math.min(50 + (upTicks > downTicks ? upTicks : downTicks) * 6, 72)
+      probability = Math.min(55 + (upTicks > downTicks ? upTicks : downTicks) * 4, 70)
+      reasoning = `Turbo: ${upTicks} up, ${downTicks} down in ${n} ticks. Quick ${dir} expected.`
+    }
+  }
+
+  // For direction-based market types, return prices in recentDigits so frontend can show ▲/▼ arrows
+  const isDirection = marketType === 'multiplier' || marketType === 'higher_lower' || marketType === 'turbo'
+  const recentPrices = recent.map(t => t.price)
+
   return {
     symbol: data.symbol,
     marketType,
@@ -414,7 +494,7 @@ export function getPrediction(id: string, marketType: string, barrier: number = 
     confidence: parseFloat(confidence.toFixed(1)),
     probability: parseFloat(probability.toFixed(1)),
     lastDigit,
-    recentDigits: digits,
+    recentDigits: isDirection ? recentPrices : digits,
     tickCount: n,
     streakInfo,
     reasoning,
