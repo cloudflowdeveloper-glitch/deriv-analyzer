@@ -2,11 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // These packages need to be externalized — not bundled into the standalone output
+  serverExternalPackages: ["ws"],
 };
 
 export default nextConfig;

@@ -7,7 +7,7 @@ let initCalled = false
 function ensureInit() {
   if (!initCalled) {
     initCalled = true
-    setImmediate(() => initDerivTicks())
+    setTimeout(() => initDerivTicks(), 0)
   }
 }
 

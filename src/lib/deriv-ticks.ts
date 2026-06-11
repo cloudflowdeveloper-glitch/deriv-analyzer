@@ -234,7 +234,7 @@ export function getHealth() {
   return {
     status: 'ok',
     symbols: symbolDataMap.size,
-    derivConnected: derivWs ? derivWs.readyState === 1 : false,
+    derivConnected: derivWs ? derivWs.readyState === WebSocket.OPEN : false,
     startTime: startTime,
     uptime: process.uptime(),
   }
@@ -440,80 +440,76 @@ export function initDerivTicks(): void {
 
 function connectDeriv(): void {
   try {
-    // Dynamic import of ws module (server-only)
-    import('ws').then(({ default: WebSocket }) => {
-      derivWs = new WebSocket(DERIV_WS_URL)
+    // Use native WebSocket (Node 18+, Deno, Bun, Cloudflare Workers all support it)
+    // This avoids the need for the 'ws' npm package which isn't bundled in standalone builds
+    derivWs = new WebSocket(DERIV_WS_URL)
 
-      derivWs.on('open', () => {
-        // Subscribe to all symbols
+    derivWs.onopen = () => {
+      // Subscribe to all symbols
+      for (const sym of DERIV_SYMBOLS) {
+        derivWs!.send(JSON.stringify({ ticks: sym.deriv, subscribe: 1 }))
+      }
+      // Request tick history after delay
+      setTimeout(() => {
+        if (!derivWs || derivWs.readyState !== WebSocket.OPEN) return
         for (const sym of DERIV_SYMBOLS) {
-          derivWs!.send(JSON.stringify({ ticks: sym.deriv, subscribe: 1 }))
+          derivWs!.send(JSON.stringify({
+            ticks_history: sym.deriv,
+            count: 100,
+            end: 'latest',
+            style: 'ticks',
+          }))
         }
-        // Request tick history after delay
-        setTimeout(() => {
-          if (!derivWs || derivWs.readyState !== 1) return
-          for (const sym of DERIV_SYMBOLS) {
-            derivWs!.send(JSON.stringify({
-              ticks_history: sym.deriv,
-              count: 100,
-              end: 'latest',
-              style: 'ticks',
-            }))
+      }, 2000)
+    }
+
+    derivWs.onmessage = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(typeof event.data === 'string' ? event.data : (event.data as any).toString())
+        if (!msg) return
+
+        if (msg.tick) {
+          const tick = msg.tick
+          const symbol = tick.symbol
+          const price = tick.quote
+          const epoch = tick.epoch * 1000
+          if (!symbolDataMap.has(symbol)) {
+            const cfg = DERIV_SYMBOLS.find(s => s.deriv === symbol)
+            if (cfg) initSymbolData(cfg.id, cfg, price)
           }
-        }, 2000)
-      })
-
-      derivWs.on('message', (raw: Buffer | string) => {
-        try {
-          const msg = JSON.parse(raw.toString())
-          if (!msg) return
-
-          if (msg.tick) {
-            const tick = msg.tick
-            const symbol = tick.symbol
-            const price = tick.quote
-            const epoch = tick.epoch * 1000
-            if (!symbolDataMap.has(symbol)) {
-              const cfg = DERIV_SYMBOLS.find(s => s.deriv === symbol)
-              if (cfg) initSymbolData(cfg.id, cfg, price)
-            }
-            addTick(symbol, price, epoch)
-          }
-
-          if (msg.history) {
-            const symbol = msg.echo_req?.ticks_history
-            if (!symbol) return
-            if (!symbolDataMap.has(symbol)) {
-              const cfg = DERIV_SYMBOLS.find(s => s.deriv === symbol)
-              if (cfg) initSymbolData(cfg.id, cfg)
-            }
-            const prices: Array<[number, number]> = msg.history?.prices || []
-            const times: number[] = msg.history?.times || []
-            for (let i = 0; i < Math.min(prices.length, times.length); i++) {
-              if (prices[i] !== undefined && times[i] !== undefined) {
-                addTick(symbol, prices[i], times[i] * 1000)
-              }
-            }
-          }
-
-          // Ignore errors silently
-        } catch {
-          // Skip unparseable messages
+          addTick(symbol, price, epoch)
         }
-      })
 
-      derivWs.on('close', () => {
-        // Reconnect after delay
-        setTimeout(connectDeriv, 3000)
-      })
+        if (msg.history) {
+          const symbol = msg.echo_req?.ticks_history
+          if (!symbol) return
+          if (!symbolDataMap.has(symbol)) {
+            const cfg = DERIV_SYMBOLS.find(s => s.deriv === symbol)
+            if (cfg) initSymbolData(cfg.id, cfg)
+          }
+          const prices: Array<[number, number]> = msg.history?.prices || []
+          const times: number[] = msg.history?.times || []
+          for (let i = 0; i < Math.min(prices.length, times.length); i++) {
+            if (prices[i] !== undefined && times[i] !== undefined) {
+              addTick(symbol, prices[i], times[i] * 1000)
+            }
+          }
+        }
 
-      derivWs.on('error', () => {
-        // Connection error will trigger close event
-      })
-    }).catch(() => {
-      // Failed to import ws module, retry later
-      setTimeout(connectDeriv, 5000)
-    })
+        // Ignore errors silently
+      } catch {
+        // Skip unparseable messages
+      }
+    }
+
+    derivWs.onclose = () => {
+      // Reconnect after delay
+      setTimeout(connectDeriv, 3000)
+    }
+
+    derivWs.onerror = () => {
+      // Connection error will trigger close event
+    }
   } catch {
     // Retry after delay
     setTimeout(connectDeriv, 5000)

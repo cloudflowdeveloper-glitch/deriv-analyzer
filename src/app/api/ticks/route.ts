@@ -17,7 +17,7 @@ function ensureInit() {
   if (!initCalled) {
     initCalled = true
     // Initialize in the background so it doesn't block the response
-    setImmediate(() => initDerivTicks())
+    setTimeout(() => initDerivTicks(), 0)
   }
 }
 
