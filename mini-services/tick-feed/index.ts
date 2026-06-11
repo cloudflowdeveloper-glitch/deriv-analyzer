@@ -138,9 +138,9 @@ const MAX_TICKS = 500
 const ANALYSIS_WINDOW = 100
 
 function getLastDigit(price: number): number {
-  // Get the last digit of the price as commonly displayed
-  const str = price.toFixed(2)
-  return parseInt(str[str.length - 1])
+  // Last digit of the integer part of the price
+  // e.g. 63461.36 → 63461 → last digit is 1
+  return Math.abs(Math.floor(price)) % 10
 }
 
 function initSymbolData(tvSymbol: string, name: string, category: string, source: 'binance' | 'poll', initialPrice?: number): SymbolData {
