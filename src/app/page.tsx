@@ -1,7 +1,7 @@
 'use client'
 
 import { useTradingStore } from '@/stores/trading-store'
-import { MarketType, MARKET_TYPES, POPULAR_SYMBOLS, TIMEFRAMES } from '@/lib/trading-types'
+import { MarketType, MARKET_TYPES, ALL_SYMBOLS, TIMEFRAMES } from '@/lib/trading-types'
 import { AnalysisPanel } from '@/components/analysis/analysis-panel'
 import { AccumulatorPanel } from '@/components/analysis/accumulator-panel'
 import { TvChart } from '@/components/tradingview/tv-chart'
@@ -10,11 +10,11 @@ import { TvTechnicalAnalysis } from '@/components/tradingview/tv-technical-analy
 import { TvMarketOverview } from '@/components/tradingview/tv-market-overview'
 import { TvScreener } from '@/components/tradingview/tv-screener'
 import { TvEconomicCalendar } from '@/components/tradingview/tv-economic-calendar'
+import { SymbolSearch } from '@/components/tradingview/symbol-search'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -46,6 +46,8 @@ export default function TradingAnalysisPage() {
     accumulatorLegs
   } = store
 
+  const currentSymbol = ALL_SYMBOLS.find(s => s.symbol === activeSymbol)
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Ticker Tape */}
@@ -59,29 +61,19 @@ export default function TradingAnalysisPage() {
           <div className="flex items-center justify-between h-14">
             {/* Logo + Symbol selector */}
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary shrink-0">
                 <Activity className="h-4.5 w-4.5 text-primary-foreground" />
               </div>
               <div className="hidden sm:block">
                 <h1 className="text-sm font-bold leading-tight">TradingView Analyzer</h1>
-                <p className="text-[10px] text-muted-foreground">Real-time Market Analysis</p>
+                <p className="text-[10px] text-muted-foreground">{ALL_SYMBOLS.length} symbols • Real-time Analysis</p>
               </div>
               <Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" />
-              <Select value={activeSymbol} onValueChange={setActiveSymbol}>
-                <SelectTrigger className="w-40 lg:w-52 h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {POPULAR_SYMBOLS.map(s => (
-                    <SelectItem key={s.symbol} value={s.symbol}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{s.name}</span>
-                        <span className="text-muted-foreground text-[10px]">{s.exchange}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SymbolSearch
+                value={activeSymbol}
+                onChange={setActiveSymbol}
+                className="w-52 lg:w-64"
+              />
               <Select value={timeframe} onValueChange={setTimeframe}>
                 <SelectTrigger className="w-16 h-9 text-xs">
                   <SelectValue />
@@ -96,6 +88,11 @@ export default function TradingAnalysisPage() {
 
             {/* Right controls */}
             <div className="flex items-center gap-2">
+              {currentSymbol && (
+                <Badge variant="outline" className="text-[10px] hidden md:inline-flex">
+                  <span className="font-mono">{currentSymbol.category}</span>
+                </Badge>
+              )}
               {accumulatorLegs.length > 0 && (
                 <Badge variant="secondary" className="text-[10px] cursor-pointer" onClick={() => setActiveTab('accumulators')}>
                   <Layers className="h-3 w-3 mr-1" />
@@ -120,14 +117,14 @@ export default function TradingAnalysisPage() {
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MarketType | 'chart' | 'dashboard' | 'accumulators')}>
           {/* Tab Navigation */}
           <div className="border-b bg-muted/30 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-[1920px] mx-auto">
-              <TabsList className="h-auto flex flex-wrap gap-0.5 bg-transparent p-0 pt-2">
+            <div className="max-w-[1920px] mx-auto overflow-x-auto">
+              <TabsList className="h-auto flex flex-nowrap gap-0.5 bg-transparent p-0 pt-2 min-w-max">
                 {MARKET_TABS.map((tab) => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      'flex items-center gap-1.5 px-3 py-2 text-xs rounded-t-md rounded-b-none border-b-2 border-transparent',
+                      'flex items-center gap-1.5 px-3 py-2 text-xs rounded-t-md rounded-b-none border-b-2 border-transparent shrink-0',
                       'data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:shadow-sm',
                       'hover:bg-accent/50 transition-colors'
                     )}
@@ -198,7 +195,7 @@ export default function TradingAnalysisPage() {
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-xs">{activeSymbol} — Technical Analysis</CardTitle>
+                    <CardTitle className="text-xs">{currentSymbol?.name || activeSymbol} — Technical Analysis</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0" style={{ height: 400 }}>
                     <TvTechnicalAnalysis symbol={activeSymbol} colorTheme={theme} isTransparent={true} />
@@ -212,7 +209,7 @@ export default function TradingAnalysisPage() {
               <AccumulatorPanel />
             </TabsContent>
 
-            {/* Market Type Tabs */}
+            {/* Market Type Tabs - Each shows chart + analysis */}
             {(Object.keys(MARKET_TYPES) as MarketType[]).map((type) => (
               <TabsContent key={type} value={type}>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -237,7 +234,7 @@ export default function TradingAnalysisPage() {
       <footer className="border-t bg-background mt-auto">
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <p>TradingView Analyzer — Powered by TradingView • Real-time market analysis</p>
+            <p>TradingView Analyzer — Powered by TradingView • {ALL_SYMBOLS.length} symbols • Real-time market analysis</p>
             <div className="flex items-center gap-1">
               <span>⚠</span>
               <span>For educational purposes only. Not financial advice.</span>
@@ -248,4 +245,3 @@ export default function TradingAnalysisPage() {
     </div>
   )
 }
-

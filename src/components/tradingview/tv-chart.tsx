@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { POPULAR_SYMBOLS } from '@/lib/trading-types'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -37,6 +37,9 @@ export function TvChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const widgetRef = useRef<unknown>(null)
+  const uniqueId = useId()
+  // useId() returns a string with colons (e.g. ":r0:") — sanitize for a valid DOM id
+  const containerId = `tv-chart-${uniqueId.replace(/:/g, '')}`
   const symbolInfo = POPULAR_SYMBOLS.find((s) => s.symbol === symbol)
 
   useEffect(() => {
@@ -47,14 +50,15 @@ export function TvChart({
     const activeStudies = studies ?? DEFAULT_STUDIES
 
     const initWidget = () => {
-      // Clean up previous widget
-      if (widgetRef.current) {
-        // TradingView widget doesn't have a documented destroy method,
-        // so we clear the container and recreate
-        container.innerHTML = ''
+      // Destroy previous widget by clearing the container innerHTML.
+      // TradingView widget has no documented destroy method, so removing
+      // its DOM nodes is the safest cleanup.
+      const widgetContainer = document.getElementById(containerId)
+      if (widgetContainer) {
+        widgetContainer.innerHTML = ''
       }
+      widgetRef.current = null
 
-      // @ts-expect-error TradingView global
       widgetRef.current = new window.TradingView.widget({
         autosize: true,
         symbol: symbol,
@@ -65,7 +69,7 @@ export function TvChart({
         locale: locale,
         enable_publishing: false,
         allow_symbol_change: true,
-        container_id: 'tv-chart-container',
+        container_id: containerId,
         hide_side_toolbar: false,
         studies: activeStudies.map((id) => ({
           id: id,
@@ -94,14 +98,18 @@ export function TvChart({
     document.head.appendChild(script)
 
     return () => {
-      // Clean up: remove the script if it was the one we added
+      // Clean up: clear the widget container and remove the script tag
+      const widgetContainer = document.getElementById(containerId)
+      if (widgetContainer) {
+        widgetContainer.innerHTML = ''
+      }
+      widgetRef.current = null
       if (script.parentNode) {
         script.parentNode.removeChild(script)
       }
-      widgetRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, theme, interval, studies])
+  }, [symbol, theme, interval, studies, containerId])
 
   return (
     <div className={cn('relative', className)}>
@@ -120,7 +128,7 @@ export function TvChart({
         style={{ height: `${height}px` }}
       >
         <div
-          id="tv-chart-container"
+          id={containerId}
           className="tradingview-widget-container__widget"
           style={{ height: `${height}px`, width: '100%' }}
         />

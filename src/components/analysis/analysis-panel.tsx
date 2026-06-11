@@ -1,12 +1,11 @@
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTradingStore } from '@/stores/trading-store'
-import { MarketType, MARKET_TYPES, SIGNAL_COLORS, POPULAR_SYMBOLS, AnalysisSignal, AccumulatorLeg } from '@/lib/trading-types'
+import { MarketType, MARKET_TYPES, SIGNAL_COLORS, ALL_SYMBOLS, SYMBOL_CATEGORIES, AnalysisSignal, AccumulatorLeg } from '@/lib/trading-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -14,10 +13,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  TrendingUp, TrendingDown, Plus, Trash2, Target, AlertTriangle,
-  CheckCircle2, ArrowRight, DollarSign, Shield, Zap, Hash,
-  Unlink, ArrowUpDown, X, Layers, Activity, ChevronDown, ChevronUp,
-  BarChart3, Clock
+  TrendingUp, Plus, Target, AlertTriangle,
+  CheckCircle2, Activity, Hash,
+  Unlink, ArrowUpDown, X, Layers, ChevronDown, ChevronUp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useMemo } from 'react'
@@ -30,6 +28,13 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
   const config = MARKET_TYPES[marketType]
   const { activeSymbol, timeframe, setActiveSymbol, accumulatorLegs, addLeg } = useTradingStore()
   const [sortBy, setSortBy] = useState<'confidence' | 'riskReward'>('confidence')
+  const [selectedCategory, setSelectedCategory] = useState<string>('crypto')
+
+  // Get symbols for selected category
+  const categorySymbols = useMemo(() => {
+    const cat = SYMBOL_CATEGORIES.find(c => c.id === selectedCategory)
+    return cat ? cat.symbols.slice(0, 12) : SYMBOL_CATEGORIES[0].symbols.slice(0, 12)
+  }, [selectedCategory])
 
   // Fetch single symbol analysis
   const { data: analysis, isLoading } = useQuery({
@@ -41,11 +46,11 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
     refetchInterval: 10000,
   })
 
-  // Batch analysis for all symbols
+  // Batch analysis for category symbols
   const { data: batchData } = useQuery({
-    queryKey: ['batch-analysis', marketType, timeframe],
+    queryKey: ['batch-analysis', marketType, timeframe, selectedCategory],
     queryFn: async () => {
-      const symbols = POPULAR_SYMBOLS.map(s => s.symbol)
+      const symbols = categorySymbols.map(s => s.symbol)
       const res = await fetch('/api/analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,31 +75,29 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
     accumulatorLegs.some(l => l.symbol === symbol && l.marketType === marketType)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Market Type Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', config.bg)}>
-              <span className={cn('text-sm font-bold', config.color)}>{config.label.charAt(0)}</span>
-            </div>
-            <div>
-              <h2 className={cn('text-lg font-bold', config.color)}>{config.label}</h2>
-              <p className="text-xs text-muted-foreground">{config.shortDesc}</p>
-            </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', config.bg)}>
+            <span className={cn('text-sm font-bold', config.color)}>{config.label.charAt(0)}</span>
+          </div>
+          <div>
+            <h2 className={cn('text-base font-bold', config.color)}>{config.label}</h2>
+            <p className="text-[10px] text-muted-foreground">{config.shortDesc}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Select value={activeSymbol} onValueChange={setActiveSymbol}>
-            <SelectTrigger className="w-48 h-8 text-xs">
+            <SelectTrigger className="w-40 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {POPULAR_SYMBOLS.map(s => (
+              {ALL_SYMBOLS.map(s => (
                 <SelectItem key={s.symbol} value={s.symbol} className="text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{s.name}</span>
-                    <span className="text-muted-foreground">{s.exchange}</span>
+                    <span className="text-muted-foreground text-[9px]">{s.exchange}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -103,80 +106,80 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
         </div>
       </div>
 
-      {/* Description Card */}
+      {/* Description */}
       <Card>
-        <CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">{config.description}</p>
+        <CardContent className="p-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">{config.description}</p>
         </CardContent>
       </Card>
 
       {/* Active Symbol Analysis */}
       {isLoading ? (
         <Card>
-          <CardContent className="p-6 flex items-center justify-center">
+          <CardContent className="p-4 flex items-center justify-center">
             <div className="animate-pulse flex items-center gap-2">
               <Activity className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Analyzing {activeSymbol}...</span>
+              <span className="text-xs text-muted-foreground">Analyzing {activeSymbol}...</span>
             </div>
           </CardContent>
         </Card>
       ) : analysis ? (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CardTitle className="text-sm">Signal for {activeSymbol}</CardTitle>
+                <CardTitle className="text-xs">{analysis.symbol.split(':').pop()}</CardTitle>
                 <Badge
                   variant="outline"
-                  className={cn('text-[10px] font-bold px-2 py-0.5', SIGNAL_COLORS[analysis.signal].text, SIGNAL_COLORS[analysis.signal].bg, SIGNAL_COLORS[analysis.signal].border)}
+                  className={cn('text-[9px] font-bold px-1.5 py-0.5', SIGNAL_COLORS[analysis.signal].text, SIGNAL_COLORS[analysis.signal].bg, SIGNAL_COLORS[analysis.signal].border)}
                 >
                   {SIGNAL_COLORS[analysis.signal].label}
                 </Badge>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Confidence</p>
-                <p className="text-lg font-bold">{analysis.confidence.toFixed(1)}%</p>
+                <p className="text-[10px] text-muted-foreground">Confidence</p>
+                <p className="text-base font-bold">{analysis.confidence.toFixed(1)}%</p>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Progress value={analysis.confidence} className="h-2" />
+          <CardContent className="space-y-3">
+            <Progress value={analysis.confidence} className="h-1.5" />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               <div className="p-2 rounded-lg bg-muted/50 text-center">
-                <p className="text-[10px] text-muted-foreground">Entry Price</p>
-                <p className="text-sm font-bold">{analysis.entryPrice.toFixed(4)}</p>
+                <p className="text-[9px] text-muted-foreground">Entry</p>
+                <p className="text-xs font-bold">{analysis.entryPrice.toFixed(2)}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/50 text-center">
-                <p className="text-[10px] text-muted-foreground">Target</p>
-                <p className="text-sm font-bold text-emerald-600">{analysis.target.toFixed(4)}</p>
+                <p className="text-[9px] text-muted-foreground">Target</p>
+                <p className="text-xs font-bold text-emerald-600">{analysis.target.toFixed(2)}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/50 text-center">
-                <p className="text-[10px] text-muted-foreground">Stop Loss</p>
-                <p className="text-sm font-bold text-red-600">{analysis.stopLoss.toFixed(4)}</p>
+                <p className="text-[9px] text-muted-foreground">Stop</p>
+                <p className="text-xs font-bold text-red-600">{analysis.stopLoss.toFixed(2)}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/50 text-center">
-                <p className="text-[10px] text-muted-foreground">Risk/Reward</p>
-                <p className="text-sm font-bold">{analysis.riskReward.toFixed(2)}</p>
+                <p className="text-[9px] text-muted-foreground">R:R</p>
+                <p className="text-xs font-bold">{analysis.riskReward.toFixed(2)}</p>
               </div>
             </div>
 
             <Separator />
 
+            {/* Indicators */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-2">INDICATORS</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Indicators</p>
+              <div className="space-y-1">
                 {analysis.indicators.map((ind, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-lg border">
+                  <div key={i} className="flex items-center justify-between p-1.5 rounded-md border">
                     <div className="min-w-0">
-                      <p className="text-xs font-medium truncate">{ind.name}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{ind.description}</p>
+                      <p className="text-[10px] font-medium truncate">{ind.name}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-xs font-semibold">{String(ind.value)}</span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <span className="text-[10px] font-semibold">{String(ind.value)}</span>
                       <Badge
                         variant="outline"
-                        className={cn('text-[9px] px-1 py-0', SIGNAL_COLORS[ind.signal].text)}
+                        className={cn('text-[8px] px-1 py-0', SIGNAL_COLORS[ind.signal].text)}
                       >
                         {SIGNAL_COLORS[ind.signal].label}
                       </Badge>
@@ -187,12 +190,12 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
             </div>
 
             <Button
-              className="w-full"
+              className="w-full h-8 text-xs"
               variant={isInAccumulator(analysis.symbol) ? 'default' : 'outline'}
               disabled={isInAccumulator(analysis.symbol)}
               onClick={() => addLeg({
                 symbol: analysis.symbol,
-                name: POPULAR_SYMBOLS.find(s => s.symbol === analysis.symbol)?.name || analysis.symbol,
+                name: ALL_SYMBOLS.find(s => s.symbol === analysis.symbol)?.name || analysis.symbol,
                 marketType,
                 signal: analysis.signal,
                 confidence: analysis.confidence,
@@ -202,71 +205,83 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                 timeframe,
               })}
             >
-              {isInAccumulator(analysis.symbol) ? 'Added to Accumulator' : 'Add to Accumulator'}
+              {isInAccumulator(analysis.symbol) ? '✓ Added to Accumulator' : '+ Add to Accumulator'}
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {/* All Symbols Analysis */}
+      {/* All Symbols Analysis by Category */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-sm">All Symbols — {config.label}</CardTitle>
-              <CardDescription className="text-xs">
+              <CardTitle className="text-xs">Symbols — {config.label}</CardTitle>
+              <CardDescription className="text-[10px]">
                 {summary ? `${summary.buySignals} buy / ${summary.sellSignals} sell / ${summary.neutralSignals} neutral` : 'Loading...'}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-24 h-7 text-[10px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SYMBOL_CATEGORIES.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id} className="text-xs">
+                      {cat.label} ({cat.symbols.length})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn('h-7 text-[10px]', sortBy === 'confidence' && 'bg-accent')}
+                className={cn('h-7 text-[10px] px-2', sortBy === 'confidence' && 'bg-accent')}
                 onClick={() => setSortBy('confidence')}
               >
-                By Confidence
+                Conf.
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn('h-7 text-[10px]', sortBy === 'riskReward' && 'bg-accent')}
+                className={cn('h-7 text-[10px] px-2', sortBy === 'riskReward' && 'bg-accent')}
                 onClick={() => setSortBy('riskReward')}
               >
-                By R:R
+                R:R
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[400px]">
-            <div className="space-y-1.5">
+          <ScrollArea className="max-h-[360px]">
+            <div className="space-y-1">
               {batchAnalyses.map((a: AnalysisSignal) => {
-                const sym = POPULAR_SYMBOLS.find(s => s.symbol === a.symbol)
+                const sym = ALL_SYMBOLS.find(s => s.symbol === a.symbol)
                 const inAcc = isInAccumulator(a.symbol)
 
                 return (
-                  <div key={a.symbol} className="flex items-center justify-between p-2.5 rounded-lg border hover:bg-accent/30 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div key={a.symbol} className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent/30 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{sym?.name || a.symbol}</p>
-                        <p className="text-[10px] text-muted-foreground">{sym?.exchange} • {sym?.type}</p>
+                        <p className="text-xs font-medium truncate">{sym?.name || a.symbol.split(':').pop()}</p>
+                        <p className="text-[9px] text-muted-foreground">{sym?.exchange}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Badge
                         variant="outline"
-                        className={cn('text-[9px] px-1.5 py-0 font-semibold', SIGNAL_COLORS[a.signal].text)}
+                        className={cn('text-[8px] px-1 py-0 font-semibold', SIGNAL_COLORS[a.signal].text)}
                       >
                         {SIGNAL_COLORS[a.signal].label}
                       </Badge>
-                      <span className="text-xs font-medium w-12 text-right">{a.confidence.toFixed(0)}%</span>
-                      <span className="text-xs text-muted-foreground w-8 text-right">{a.riskReward.toFixed(1)}:1</span>
+                      <span className="text-[10px] font-medium w-8 text-right">{a.confidence.toFixed(0)}%</span>
+                      <span className="text-[10px] text-muted-foreground w-7 text-right">{a.riskReward.toFixed(1)}:1</span>
                       <Button
                         size="sm"
                         variant={inAcc ? 'default' : 'outline'}
-                        className={cn('h-6 text-[9px] px-2', inAcc && 'bg-emerald-600 hover:bg-emerald-700')}
+                        className={cn('h-6 text-[9px] px-1.5', inAcc && 'bg-emerald-600 hover:bg-emerald-700')}
                         disabled={inAcc}
                         onClick={() => addLeg({
                           symbol: a.symbol,
@@ -280,7 +295,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
                           timeframe,
                         })}
                       >
-                        {inAcc ? 'Added' : '+ Acc'}
+                        {inAcc ? '✓' : '+ Acc'}
                       </Button>
                     </div>
                   </div>

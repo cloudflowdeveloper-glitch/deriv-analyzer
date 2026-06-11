@@ -118,24 +118,153 @@ export const SIGNAL_COLORS: Record<SignalType, { label: string; text: string; bg
   strong_sell: { label: 'Strong Sell', text: 'text-red-700', bg: 'bg-red-100', border: 'border-red-300', hex: '#dc2626' }
 }
 
-export const POPULAR_SYMBOLS = [
-  { symbol: 'BINANCE:BTCUSDT', name: 'BTC/USDT', exchange: 'Binance', type: 'crypto' },
-  { symbol: 'BINANCE:ETHUSDT', name: 'ETH/USDT', exchange: 'Binance', type: 'crypto' },
-  { symbol: 'FX:EURUSD', name: 'EUR/USD', exchange: 'Forex', type: 'forex' },
-  { symbol: 'FX:GBPUSD', name: 'GBP/USD', exchange: 'Forex', type: 'forex' },
-  { symbol: 'NASDAQ:AAPL', name: 'Apple', exchange: 'NASDAQ', type: 'stock' },
-  { symbol: 'NASDAQ:GOOGL', name: 'Alphabet', exchange: 'NASDAQ', type: 'stock' },
-  { symbol: 'NASDAQ:MSFT', name: 'Microsoft', exchange: 'NASDAQ', type: 'stock' },
-  { symbol: 'NASDAQ:TSLA', name: 'Tesla', exchange: 'NASDAQ', type: 'stock' },
-  { symbol: 'NASDAQ:AMZN', name: 'Amazon', exchange: 'NASDAQ', type: 'stock' },
-  { symbol: 'BINANCE:SOLUSDT', name: 'SOL/USDT', exchange: 'Binance', type: 'crypto' },
-  { symbol: 'BINANCE:BNBUSDT', name: 'BNB/USDT', exchange: 'Binance', type: 'crypto' },
-  { symbol: 'FX:USDJPY', name: 'USD/JPY', exchange: 'Forex', type: 'forex' },
-  { symbol: 'FX:XAUUSD', name: 'Gold', exchange: 'Forex', type: 'commodity' },
-  { symbol: 'TVC:US30', name: 'Dow Jones 30', exchange: 'Index', type: 'index' },
-  { symbol: 'FX:EURGBP', name: 'EUR/GBP', exchange: 'Forex', type: 'forex' },
-  { symbol: 'BINANCE:XRPUSDT', name: 'XRP/USDT', exchange: 'Binance', type: 'crypto' },
+// ─── Symbol shape ───────────────────────────────────────────────
+export type SymbolItem = { symbol: string; name: string; exchange: string; type: string; category: string }
+
+// ─── ALL_SYMBOLS – comprehensive flat list ──────────────────────────
+export const ALL_SYMBOLS: SymbolItem[] = [
+  // ── Crypto (Binance) ──────────────────────────────────────────────
+  { symbol: 'BINANCE:BTCUSDT',  name: 'Bitcoin',           exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:ETHUSDT',  name: 'Ethereum',          exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:SOLUSDT',  name: 'Solana',            exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:BNBUSDT',  name: 'BNB',               exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:XRPUSDT',  name: 'XRP',               exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:ADAUSDT',  name: 'Cardano',           exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:DOGEUSDT', name: 'Dogecoin',          exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:AVAXUSDT', name: 'Avalanche',         exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:DOTUSDT',  name: 'Polkadot',          exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:MATICUSDT',name: 'Polygon',           exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:LINKUSDT', name: 'Chainlink',         exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:SHIBUSDT', name: 'Shiba Inu',         exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:ATOMUSDT', name: 'Cosmos',            exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:UNIUSDT',  name: 'Uniswap',           exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+  { symbol: 'BINANCE:NEARUSDT', name: 'NEAR Protocol',     exchange: 'Binance', type: 'crypto',     category: 'Crypto' },
+
+  // ── Forex ────────────────────────────────────────────────────────
+  { symbol: 'FX:EURUSD',  name: 'EUR/USD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:GBPUSD',  name: 'GBP/USD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:USDJPY',  name: 'USD/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:USDCHF',  name: 'USD/CHF', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:AUDUSD',  name: 'AUD/USD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:NZDUSD',  name: 'NZD/USD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:USDCAD',  name: 'USD/CAD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:EURGBP',  name: 'EUR/GBP', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:EURJPY',  name: 'EUR/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:GBPJPY',  name: 'GBP/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:AUDJPY',  name: 'AUD/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:EURCHF',  name: 'EUR/CHF', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:EURAUD',  name: 'EUR/AUD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:GBPAUD',  name: 'GBP/AUD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:GBPCHF',  name: 'GBP/CHF', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:NZDJPY',  name: 'NZD/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:CADJPY',  name: 'CAD/JPY', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:AUDNZD',  name: 'AUD/NZD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:EURNZD',  name: 'EUR/NZD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:GBPNZD',  name: 'GBP/NZD', exchange: 'Forex', type: 'forex',     category: 'Forex' },
+  { symbol: 'FX:XAUUSD',  name: 'Gold',    exchange: 'Forex', type: 'commodity', category: 'Forex' },
+  { symbol: 'FX:XAGUSD',  name: 'Silver',  exchange: 'Forex', type: 'commodity', category: 'Forex' },
+  { symbol: 'FX:USOIL',   name: 'Oil',     exchange: 'Forex', type: 'commodity', category: 'Forex' },
+
+  // ── US Stocks (NASDAQ) ───────────────────────────────────────────
+  { symbol: 'NASDAQ:AAPL', name: 'Apple',            exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:MSFT', name: 'Microsoft',        exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:GOOGL',name: 'Alphabet',         exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:AMZN', name: 'Amazon',           exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:TSLA', name: 'Tesla',            exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:META', name: 'Meta Platforms',    exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:NVDA', name: 'NVIDIA',           exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:NFLX', name: 'Netflix',          exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:AMD',  name: 'AMD',              exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:INTC', name: 'Intel',            exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:PYPL', name: 'PayPal',           exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:CRM',  name: 'Salesforce',       exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:ORCL', name: 'Oracle',           exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:CSCO', name: 'Cisco',            exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:PEP',  name: 'PepsiCo',          exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:COST', name: 'Costco',           exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:AVGO', name: 'Broadcom',         exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:QCOM', name: 'Qualcomm',         exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:TXN',  name: 'Texas Instruments',exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+  { symbol: 'NASDAQ:SBUX', name: 'Starbucks',        exchange: 'NASDAQ', type: 'stock',     category: 'Stocks' },
+
+  // ── US Stocks (NYSE) ─────────────────────────────────────────────
+  { symbol: 'NYSE:JPM',  name: 'JPMorgan Chase',  exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:BAC',  name: 'Bank of America', exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:V',    name: 'Visa',           exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:MA',   name: 'Mastercard',     exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:WMT',  name: 'Walmart',        exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:DIS',  name: 'Walt Disney',    exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:BA',   name: 'Boeing',         exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:HD',   name: 'Home Depot',     exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:CAT',  name: 'Caterpillar',    exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:GE',   name: 'General Electric',exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:IBM',  name: 'IBM',            exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:KO',   name: 'Coca-Cola',      exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:PFE',  name: 'Pfizer',         exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:JNJ',  name: 'Johnson & Johnson',exchange: 'NYSE',type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:UNH',  name: 'UnitedHealth',   exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:MRK',  name: 'Merck',          exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:PG',   name: 'Procter & Gamble',exchange: 'NYSE',type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:UBER', name: 'Uber',           exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:COIN', name: 'Coinbase',       exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+  { symbol: 'NYSE:NIO',  name: 'NIO',            exchange: 'NYSE', type: 'stock', category: 'Stocks' },
+
+  // ── Indices ──────────────────────────────────────────────────────
+  { symbol: 'TVC:US30',   name: 'Dow Jones 30',       exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:SPX500', name: 'S&P 500',            exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:NDX100', name: 'Nasdaq 100',         exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:UK100',  name: 'FTSE 100',           exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:DE40',   name: 'DAX 40',             exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:JP225',  name: 'Nikkei 225',         exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:FR40',   name: 'CAC 40',             exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:EU50',   name: 'Euro Stoxx 50',      exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:HK50',   name: 'Hang Seng',          exchange: 'Index', type: 'index', category: 'Indices' },
+  { symbol: 'TVC:AU200',  name: 'ASX 200',            exchange: 'Index', type: 'index', category: 'Indices' },
 ]
+
+// ─── SYMBOL_CATEGORIES – grouped by market sector ───────────────────
+export const SYMBOL_CATEGORIES: Array<{ id: string; label: string; symbols: SymbolItem[] }> = [
+  {
+    id: 'crypto',
+    label: 'Crypto',
+    symbols: ALL_SYMBOLS.filter(s => s.category === 'Crypto'),
+  },
+  {
+    id: 'forex',
+    label: 'Forex',
+    symbols: ALL_SYMBOLS.filter(s => s.category === 'Forex'),
+  },
+  {
+    id: 'stocks',
+    label: 'Stocks',
+    symbols: ALL_SYMBOLS.filter(s => s.category === 'Stocks'),
+  },
+  {
+    id: 'indices',
+    label: 'Indices',
+    symbols: ALL_SYMBOLS.filter(s => s.category === 'Indices'),
+  },
+  {
+    id: 'commodities',
+    label: 'Commodities',
+    symbols: ALL_SYMBOLS.filter(s => s.type === 'commodity'),
+  },
+]
+
+// ─── searchSymbols – fuzzy-match helper ─────────────────────────────
+export function searchSymbols(query: string): SymbolItem[] {
+  const q = query.toLowerCase().trim()
+  if (!q) return ALL_SYMBOLS
+  return ALL_SYMBOLS.filter(s =>
+    s.symbol.toLowerCase().includes(q) ||
+    s.name.toLowerCase().includes(q) ||
+    s.exchange.toLowerCase().includes(q) ||
+    s.category.toLowerCase().includes(q)
+  )
+}
+
+// ─── POPULAR_SYMBOLS – backward-compatible alias ────────────────────
+export const POPULAR_SYMBOLS = ALL_SYMBOLS
 
 export const TIMEFRAMES = [
   { value: '1', label: '1m' },

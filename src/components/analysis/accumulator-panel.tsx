@@ -1,7 +1,7 @@
 'use client'
 
 import { useTradingStore } from '@/stores/trading-store'
-import { SIGNAL_COLORS, AccumulatorLeg, POPULAR_SYMBOLS } from '@/lib/trading-types'
+import { SIGNAL_COLORS, AccumulatorLeg, ALL_SYMBOLS, MARKET_TYPES } from '@/lib/trading-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import {
   X, ArrowRight, BarChart3, CheckCircle2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useMemo } from 'react'
 
 export function AccumulatorPanel() {
   const { accumulatorLegs, removeLeg, clearAccumulator } = useTradingStore()
@@ -34,20 +35,30 @@ export function AccumulatorPanel() {
 
   const analysis = analysisResult?.analysis
 
-  const combinedOdds = accumulatorLegs.length === 0
-    ? 1
-    : accumulatorLegs.reduce((a: number, l: AccumulatorLeg) => a * l.odds, 1)
+  const combinedOdds = useMemo(() => {
+    if (accumulatorLegs.length === 0) return 1
+    return accumulatorLegs.reduce((a: number, l: AccumulatorLeg) => a * l.odds, 1)
+  }, [accumulatorLegs])
 
-  const stakeSimulation = [
-    { stake: 1 }, { stake: 5 }, { stake: 10 }, { stake: 25 }, { stake: 50 }, { stake: 100 }
-  ].map(s => ({
-    ...s,
-    potential: parseFloat((s.stake * combinedOdds).toFixed(2)),
-    profit: parseFloat(((s.stake * combinedOdds) - s.stake).toFixed(2)),
-  }))
+  const stakeSimulation = useMemo(() => {
+    if (accumulatorLegs.length === 0) return []
+    const stakes = [1, 5, 10, 25, 50, 100]
+    return stakes.map(s => ({
+      stake: s,
+      potential: parseFloat((s * combinedOdds).toFixed(2)),
+      profit: parseFloat(((s * combinedOdds) - s).toFixed(2)),
+    }))
+  }, [accumulatorLegs, combinedOdds])
+
+  const signalBreakdown = useMemo(() => {
+    const counts: Record<string, number> = { strong_buy: 0, buy: 0, neutral: 0, sell: 0, strong_sell: 0 }
+    accumulatorLegs.forEach(leg => { counts[leg.signal]++ })
+    return counts
+  }, [accumulatorLegs])
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary" />
@@ -67,8 +78,16 @@ export function AccumulatorPanel() {
             <Layers className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-muted-foreground">No Legs Added</h3>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              Browse market types and click &quot;Add to Accumulator&quot; to build your multi-signal accumulator. You can add up to 10 legs from different market types.
+              Browse market types and click &quot;+ Add to Accumulator&quot; on any analysis to build your multi-signal accumulator.
+              Combine signals from different market types (Even/Odd, Differs, Over/Under, Multipliers, Higher/Lower, Turbos) for up to 10 legs.
             </p>
+            <div className="flex flex-wrap justify-center gap-2 mt-4">
+              {(Object.keys(MARKET_TYPES) as Array<keyof typeof MARKET_TYPES>).map((type) => (
+                <Badge key={type} variant="outline" className={cn('text-[10px]', MARKET_TYPES[type].color)}>
+                  {MARKET_TYPES[type].label}
+                </Badge>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -85,14 +104,7 @@ export function AccumulatorPanel() {
               <ScrollArea className="max-h-[500px]">
                 <div className="space-y-2">
                   {accumulatorLegs.map((leg, idx) => {
-                    const mtConfig = {
-                      even_odd: { label: 'Even/Odd', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                      differs: { label: 'Differs', color: 'text-orange-600', bg: 'bg-orange-50' },
-                      over_under: { label: 'Over/Under', color: 'text-sky-600', bg: 'bg-sky-50' },
-                      multiplier: { label: 'Multiplier', color: 'text-purple-600', bg: 'bg-purple-50' },
-                      higher_lower: { label: 'Higher/Lower', color: 'text-rose-600', bg: 'bg-rose-50' },
-                      turbo: { label: 'Turbo', color: 'text-amber-600', bg: 'bg-amber-50' },
-                    }[leg.marketType]
+                    const mtConfig = MARKET_TYPES[leg.marketType]
 
                     return (
                       <div key={`${leg.symbol}-${leg.marketType}`} className="p-3 rounded-lg border">
@@ -104,22 +116,31 @@ export function AccumulatorPanel() {
                             <div className="min-w-0">
                               <p className="text-sm font-medium">{leg.name}</p>
                               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                <Badge variant="outline" className={cn('text-[9px] px-1 py-0', mtConfig.color, mtConfig.bg)}>
+                                <Badge variant="outline" className={cn('text-[8px] px-1 py-0', mtConfig.color, mtConfig.bg)}>
                                   {mtConfig.label}
                                 </Badge>
-                                <span>{leg.timeframe}</span>
+                                <span className="font-mono">{leg.symbol.split(':').pop()}</span>
+                                <span>• {leg.timeframe}</span>
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
                             <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 font-semibold', SIGNAL_COLORS[leg.signal].text)}>
                               {SIGNAL_COLORS[leg.signal].label}
                             </Badge>
                             <span className="text-xs font-medium">{leg.confidence.toFixed(0)}%</span>
+                            <span className="text-[10px] text-muted-foreground">×{leg.odds.toFixed(2)}</span>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-600" onClick={() => removeLeg(leg.symbol)}>
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
+                        </div>
+                        {/* Running total */}
+                        <div className="mt-2 pt-2 border-t flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground">Running odds:</span>
+                          <span className="text-xs font-bold">
+                            {parseFloat(accumulatorLegs.slice(0, idx + 1).reduce((a, l) => a * l.odds, 1).toFixed(2))}
+                          </span>
                         </div>
                       </div>
                     )
@@ -135,6 +156,9 @@ export function AccumulatorPanel() {
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-muted-foreground">Combined Odds</p>
                 <p className="text-3xl font-bold mt-1">{combinedOdds.toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {((1 / combinedOdds) * 100).toFixed(2)}% implied probability
+                </p>
               </CardContent>
             </Card>
 
@@ -187,9 +211,12 @@ export function AccumulatorPanel() {
                       analysis.signalSummary === 'Favorable' ? 'text-emerald-600' :
                       analysis.signalSummary === 'Caution' ? 'text-red-600' : 'text-amber-600'
                     )}>{analysis.signalSummary}</span>
+                    <span className="text-[10px] text-muted-foreground ml-1.5">
+                      ({analysis.buySignals} buy / {analysis.sellSignals} sell)
+                    </span>
                   </div>
 
-                  {analysis.recommendations.length > 0 && (
+                  {analysis.recommendations && analysis.recommendations.length > 0 && (
                     <>
                       <Separator />
                       <div className="space-y-1">
@@ -206,6 +233,7 @@ export function AccumulatorPanel() {
               </Card>
             )}
 
+            {/* Stake Simulation */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5" /> Stake Simulation</CardTitle>
@@ -222,6 +250,26 @@ export function AccumulatorPanel() {
                       <span className={cn('font-medium', s.profit >= 0 ? 'text-emerald-600' : 'text-red-600')}>
                         +{s.profit.toFixed(2)}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Signal Breakdown */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Signal Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5">
+                  {Object.entries(signalBreakdown).filter(([, count]) => count > 0).map(([signal, count]) => (
+                    <div key={signal} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className={cn('w-2 h-2 rounded-full', SIGNAL_COLORS[signal as keyof typeof SIGNAL_COLORS].bg)} />
+                        <span className="capitalize">{String(signal).replace('_', ' ')}</span>
+                      </div>
+                      <span className="font-medium">{count}</span>
                     </div>
                   ))}
                 </div>
