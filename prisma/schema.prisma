@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MarketEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  homeTeam    String
+  awayTeam    String
+  sport       String
+  league      String
+  status      String   @default("upcoming") // upcoming, live, completed, suspended
+  startTime   DateTime
+  currentScore String?
+  minute      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  markets     Market[]
+}
+
+model Market {
+  id            String   @id @default(cuid())
+  eventId      String
+  marketType    String   // even_odd, differs, over_under, accumulator, multiplier, higher_lower, turbo
+  marketLabel   String
+  selection    String
+  odds         Float
+  prevOdds     Float?
+  volume       Float    @default(0)
+  impliedProb  Float?
+  trend        String   @default("neutral") // rising, falling, neutral
+  status       String   @default("active") // active, suspended, settled
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  event        MarketEvent @relation(fields: [eventId], references: [eventId])
+  analysis     MarketAnalysis[]
+}
+
+model MarketAnalysis {
+  id              String   @id @default(cuid())
+  marketId        String
+  signal          String   // strong_buy, buy, neutral, sell, strong_sell
+  confidence      Float
+  KellyCriterion  Float?
+  expectedValue   Float?
+  factors         String   @default("[]") // JSON array of factors
+  timestamp       DateTime @default(now())
+  market          Market   @relation(fields: [marketId], references: [id])
+}
+
+model AnalysisHistory {
+  id          String   @id @default(cuid())
+  marketType  String
+  signal      String
+  confidence  Float
+  profit      Float?
+  accuracy    Float?
+  timestamp   DateTime @default(now())
+}
