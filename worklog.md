@@ -76,3 +76,25 @@ Stage Summary:
 - Analysis panels working with QueryClientProvider properly configured
 - Files created: src/components/providers.tsx
 - Files modified: src/app/layout.tsx
+---
+Task ID: 3
+Agent: Main Agent
+Task: Redesign analysis tool to match Deriv-style trading terminal
+
+Work Log:
+- Read all existing files and planned Deriv-style redesign
+- Completely rewrote trading-types.ts: Added Duration, DurationUnit, TradeContract, updated AnalysisSignal with probability/payout/lastDigit/barrier, updated MARKET_TYPES with predictions/durations/stake limits, added TICK_DURATIONS and TIME_DURATIONS
+- Rewrote trading-store.ts: Added stake, duration, selectedPrediction, barrier, multiplier state and setters, default tab changed to 'even_odd'
+- Rewrote api/analysis/route.ts: Added Deriv-style payout calculation, probability estimation, last digit generation, barrier/multiplier support
+- Completely rebuilt analysis-panel.tsx as Deriv-style contract panel: Prediction selector buttons, Duration picker with ticks/seconds/minutes/hours/days, Barrier digit picker for Over/Under, Multiplier grid (x2-x500) for Multiplier, Stake input with quick select ($1-$100), Potential Payout display with return %, Last Digit display, Probability meter, Signal banner, Market Scan for other symbols
+- Rebuilt accumulator-panel.tsx: Deriv-style accumulator with per-leg stake/payout, running totals, Payout Table simulation, Risk Analysis with Kelly Criterion, Signal Mix breakdown
+- Updated page.tsx: Deriv Analyzer branding, 3:5 grid (chart 3/5, analysis 2/5), tabs reordered (market types first), shorter descriptions in tabs showing type
+
+Stage Summary:
+- All 6 market type tabs fully redesigned in Deriv style
+- Prediction selector, duration picker, stake input, payout calculation all working
+- Over/Under has digit barrier picker (0-9)
+- Multiplier has x2-x500 selector
+- Accumulator shows per-leg details with running payout totals
+- Chart and Overview tabs still working with TradingView widgets
+- Verified via Agent Browser: Even/Odd, Over/Under (barrier), Multiplier, Accumulator tabs all rendering correctly
