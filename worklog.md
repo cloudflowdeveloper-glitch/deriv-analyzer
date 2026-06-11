@@ -46,3 +46,30 @@ Stage Summary:
 - AI Prediction card shows: prediction, confidence %, probability %, last 5 digits, streak info, reasoning
 - Verified via agent browser: all 3 prediction tabs (Even/Odd, Differs, Over/Under) render correctly
 - Dev server running cleanly, all API endpoints returning 200
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix last digit extraction — price 100.56 should return last digit 6
+
+Work Log:
+- Identified bug: `getLastDigit()` used `Math.abs(Math.floor(price)) % 10` which gave wrong results for decimal digits
+  - Example: 100.56 → Math.floor(100.56) = 100 → 100 % 10 = 0 (WRONG, should be 6)
+- Fixed `getLastDigit()` in `src/lib/deriv-ticks.ts` to use pipSize-aware string extraction:
+  - New: `price.toFixed(pipSize)` → take last character of string
+  - 100.56 with pipSize=2 → "100.56" → last char '6' → returns 6 (CORRECT)
+- Updated 3 call sites in deriv-ticks.ts:
+  1. `getLastDigit(initialPrice)` → `getLastDigit(initialPrice, cfg.pipSize)` in `initSymbolData()`
+  2. `getLastDigit(price)` → `getLastDigit(price, data.pipSize)` in `addTick()`
+- Verified correctness for all symbol types:
+  - Synthetic indices (pipSize=2): 4916.65→5, 94.81→1, 367.52→2 ✓
+  - Forex pairs (pipSize=5): 1.15821→1, 1.34229→9 ✓
+  - JPY pairs (pipSize=3): 160.023→3, 185.340→0 ✓
+  - Commodities: Gold 4233.02→2, Silver 67.852→2 ✓
+- Verified via API: all-prices and digits endpoints return correct lastDigit values
+- Verified via agent browser: Last Digit display, Even/Odd, Differs, Over/Under tabs all show correct digits
+
+Stage Summary:
+- Fixed critical digit extraction bug that affected ALL analysis panels
+- Changed from integer-based extraction to decimal-based extraction using pipSize
+- All 37 symbols across 7 categories now show correct last digits

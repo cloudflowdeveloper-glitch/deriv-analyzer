@@ -111,8 +111,12 @@ const MAX_TICKS = 500
 const ANALYSIS_WINDOW = 100
 
 // ─── Helpers ────────────────────────────────────────────────────────
-function getLastDigit(price: number): number {
-  return Math.abs(Math.floor(price)) % 10
+function getLastDigit(price: number, pipSize: number = 2): number {
+  // Use toFixed with pipSize to get the correct number of decimal places
+  // e.g. 100.56 with pipSize=2 → "100.56" → last char '6' → returns 6
+  // e.g. 1.05623 with pipSize=5 → "1.05623" → last char '3' → returns 3
+  const str = price.toFixed(pipSize)
+  return parseInt(str[str.length - 1]) || 0
 }
 
 function initSymbolData(id: string, cfg: typeof DERIV_SYMBOLS[0], initialPrice?: number): SymbolData {
@@ -128,7 +132,7 @@ function initSymbolData(id: string, cfg: typeof DERIV_SYMBOLS[0], initialPrice?:
     streakType: '', streakLength: 0, lastTickTime: 0,
   }
   if (initialPrice) {
-    data.lastDigit = getLastDigit(initialPrice)
+    data.lastDigit = getLastDigit(initialPrice, cfg.pipSize)
     data.highPrice = initialPrice
     data.lowPrice = initialPrice
   }
@@ -139,7 +143,7 @@ function initSymbolData(id: string, cfg: typeof DERIV_SYMBOLS[0], initialPrice?:
 function addTick(id: string, price: number, timestamp: number): void {
   const data = symbolDataMap.get(id)
   if (!data) return
-  const lastDigit = getLastDigit(price)
+  const lastDigit = getLastDigit(price, data.pipSize)
   data.prevPrice = data.currentPrice
   data.currentPrice = price
   data.lastDigit = lastDigit

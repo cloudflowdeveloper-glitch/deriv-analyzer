@@ -1,0 +1,791 @@
+     1→'use client'
+     2→
+     3→import { useState, useMemo, useCallback } from 'react'
+     4→import { useQuery } from '@tanstack/react-query'
+     5→import { useTradingStore } from '@/stores/trading-store'
+     6→import { useTickStore } from '@/stores/tick-store'
+     7→import { MarketType, MARKET_TYPES, SIGNAL_COLORS, ALL_SYMBOLS, SYMBOL_CATEGORIES, AnalysisSignal, TICK_DURATIONS, TIME_DURATIONS, Duration } from '@/lib/trading-types'
+     8→import { DigitBar, LastDigitDisplay, LivePriceDisplay, DigitStats, RecentTicks } from '@/components/ticks/digit-analysis'
+     9→import { Card, CardContent } from '@/components/ui/card'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Button } from '@/components/ui/button'
+    12→import { Input } from '@/components/ui/input'
+    13→import { Progress } from '@/components/ui/progress'
+    14→import { ScrollArea } from '@/components/ui/scroll-area'
+    15→import { Separator } from '@/components/ui/separator'
+    16→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    17→import {
+    18→  Activity, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
+    19→  Layers, ChevronUp, ChevronDown, Clock, Hash, DollarSign,
+    20→  Target, Zap, BarChart3, Wifi, WifiOff, Brain, ArrowRight,
+    21→  CheckCircle2, XCircle
+    22→} from 'lucide-react'
+    23→import { cn } from '@/lib/utils'
+    24→
+    25→// ─── Prediction types ───────────────────────────────────────────
+    26→interface PredictionData {
+    27→  symbol: string
+    28→  marketType: string
+    29→  prediction: string
+    30→  confidence: number
+    31→  probability: number
+    32→  lastDigit: number
+    33→  recentDigits: number[]
+    34→  tickCount: number
+    35→  streakInfo: string
+    36→  reasoning: string
+    37→  timestamp: string
+    38→}
+    39→
+    40→// ─── Prediction Card ──────────────────────────────────────────────
+    41→function PredictionCard({ prediction, marketType, config }: {
+    42→  prediction: PredictionData | undefined
+    43→  marketType: MarketType
+    44→  config: typeof MARKET_TYPES[MarketType]
+    45→}) {
+    46→  if (!prediction) return null
+    47→
+    48→  const isPositive = ['Even', 'Over', 'Differs'].includes(prediction.prediction)
+    49→  const confidenceLevel = prediction.confidence >= 75 ? 'high' : prediction.confidence >= 55 ? 'medium' : 'low'
+    50→  const confidenceColor = {
+    51→    high: 'text-emerald-400',
+    52→    medium: 'text-amber-400',
+    53→    low: 'text-gray-400'
+    54→  }[confidenceLevel]
+    55→
+    56→  const predictionBg = {
+    57→    even_odd: 'bg-gradient-to-r from-emerald-500/10 to-rose-500/10',
+    58→    differs: 'bg-gradient-to-r from-orange-500/10 to-amber-500/10',
+    59→    over_under: 'bg-gradient-to-r from-sky-500/10 to-amber-500/10',
+    60→    multiplier: 'bg-gradient-to-r from-purple-500/10 to-emerald-500/10',
+    61→    higher_lower: 'bg-gradient-to-r from-rose-500/10 to-emerald-500/10',
+    62→    turbo: 'bg-gradient-to-r from-amber-500/10 to-rose-500/10',
+    63→  }[marketType] || 'bg-muted/20'
+    64→
+    65→  return (
+    66→    <Card className={cn('overflow-hidden border', config.borderColor, predictionBg)}>
+    67→      <div className={cn(
+    68→        'px-3 py-1.5 flex items-center justify-between',
+    69→        'bg-gradient-to-r',
+    70→        isPositive
+    71→          ? 'from-emerald-500/15 via-emerald-500/5 to-transparent'
+    72→          : 'from-rose-500/15 via-rose-500/5 to-transparent'
+    73→      )}>
+    74→        <div className="flex items-center gap-1.5">
+    75→          <Brain className={cn('h-3.5 w-3.5', config.color)} />
+    76→          <span className={cn('text-[10px] font-bold uppercase tracking-wider', config.color)}>AI Prediction</span>
+    77→        </div>
+    78→        <Badge variant="outline" className={cn('text-[8px]', confidenceColor, config.borderColor)}>
+    79→          {confidenceLevel.toUpperCase()}
+    80→        </Badge>
+    81→      </div>
+    82→
+    83→      <CardContent className="p-3 space-y-2.5">
+    84→        {/* Main Prediction */}
+    85→        <div className="flex items-center justify-between">
+    86→          <div className="flex items-center gap-2">
+    87→            <div className={cn(
+    88→              'h-12 w-12 rounded-xl flex items-center justify-center text-lg font-black',
+    89→              'ring-1 ring-offset-1 ring-offset-background',
+    90→              isPositive
+    91→                ? 'bg-emerald-500/20 text-emerald-400 ring-emerald-500/30'
+    92→                : 'bg-rose-500/20 text-rose-400 ring-rose-500/30'
+    93→            )}>
+    94→              {prediction.prediction === 'Even' ? 'EVN' :
+    95→               prediction.prediction === 'Odd' ? 'ODD' :
+    96→               prediction.prediction === 'Over' ? 'OV↑' :
+    97→               prediction.prediction === 'Under' ? 'UN↓' :
+    98→               prediction.prediction === 'Differs' ? '≠' :
+    99→               prediction.prediction === 'Matches' ? '=' :
+   100→               prediction.prediction.slice(0, 3).toUpperCase()}
+   101→            </div>
+   102→            <div>
+   103→              <p className={cn('text-base font-bold', isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+   104→                {prediction.prediction}
+   105→              </p>
+   106→              <p className="text-[9px] text-muted-foreground">
+   107→                Last digit: <span className="font-mono font-bold text-foreground">{prediction.lastDigit}</span>
+   108→              </p>
+   109→            </div>
+   110→          </div>
+   111→
+   112→          <div className="text-right">
+   113→            <p className={cn('text-2xl font-black', confidenceColor)}>
+   114→              {prediction.confidence.toFixed(0)}%
+   115→            </p>
+   116→            <p className="text-[8px] text-muted-foreground uppercase">Confidence</p>
+   117→          </div>
+   118→        </div>
+   119→
+   120→        {/* Confidence bar */}
+   121→        <div className="space-y-1">
+   122→          <div className="flex items-center justify-between text-[9px]">
+   123→            <span className="text-muted-foreground">Prediction Strength</span>
+   124→            <span className={cn('font-bold', confidenceColor)}>{prediction.probability.toFixed(0)}% probability</span>
+   125→          </div>
+   126→          <Progress
+   127→            value={prediction.confidence}
+   128→            className={cn('h-2', isPositive ? '[&>div]:bg-emerald-500' : '[&>div]:bg-rose-500')}
+   129→          />
+   130→        </div>
+   131→
+   132→        {/* Recent digits used for prediction */}
+   133→        <div className="flex items-center gap-1.5">
+   134→          <span className="text-[8px] text-muted-foreground shrink-0">Last {prediction.tickCount}:</span>
+   135→          <div className="flex gap-0.5">
+   136→            {prediction.recentDigits.map((d, i) => (
+   137→              <div
+   138→                key={i}
+   139→                className={cn(
+   140→                  'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold',
+   141→                  d === prediction.lastDigit
+   142→                    ? 'bg-primary text-primary-foreground ring-1 ring-primary/30'
+   143→                    : d % 2 === 0
+   144→                      ? 'bg-emerald-500/20 text-emerald-400'
+   145→                      : 'bg-rose-500/20 text-rose-400'
+   146→                )}
+   147→              >
+   148→                {d}
+   149→              </div>
+   150→            ))}
+   151→            <div className="flex items-center justify-center h-5 w-5">
+   152→              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+   153→            </div>
+   154→            <div className={cn(
+   155→              'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold animate-pulse',
+   156→              isPositive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-rose-500/30 text-rose-300'
+   157→            )}>
+   158→              ?
+   159→            </div>
+   160→          </div>
+   161→        </div>
+   162→
+   163→        {/* Streak info */}
+   164→        {prediction.streakInfo && (
+   165→          <div className="flex items-center gap-1.5 text-[9px]">
+   166→            <Zap className="h-3 w-3 text-amber-400" />
+   167→            <span className="text-muted-foreground">{prediction.streakInfo}</span>
+   168→          </div>
+   169→        )}
+   170→
+   171→        {/* Reasoning */}
+   172→        <p className="text-[9px] text-muted-foreground leading-relaxed italic">
+   173→          {prediction.reasoning}
+   174→        </p>
+   175→
+   176→        {/* For Differs: show Match vs Differs comparison */}
+   177→        {marketType === 'differs' && (
+   178→          <div className="grid grid-cols-2 gap-1.5">
+   179→            <div className={cn(
+   180→              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+   181→              prediction.prediction === 'Differs'
+   182→                ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+   183→                : 'bg-muted/30 text-muted-foreground'
+   184→            )}>
+   185→              {prediction.prediction === 'Differs' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+   186→              Differs
+   187→            </div>
+   188→            <div className={cn(
+   189→              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+   190→              prediction.prediction === 'Matches'
+   191→                ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+   192→                : 'bg-muted/30 text-muted-foreground'
+   193→            )}>
+   194→              {prediction.prediction === 'Matches' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+   195→              Matches
+   196→            </div>
+   197→          </div>
+   198→        )}
+   199→      </CardContent>
+   200→    </Card>
+   201→  )
+   202→}
+   203→
+   204→// ─── Analysis Panel ──────────────────────────────────────────────
+   205→interface AnalysisPanelProps {
+   206→  marketType: MarketType
+   207→}
+   208→
+   209→export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
+   210→  const config = MARKET_TYPES[marketType]
+   211→  const {
+   212→    activeSymbol, stake, setStake, duration, setDuration,
+   213→    selectedPrediction, setSelectedPrediction, barrier, setBarrier,
+   214→    multiplier, setMultiplier,
+   215→    accumulatorLegs, addLeg
+   216→  } = useTradingStore()
+   217→
+   218→  // Live tick data
+   219→  const digitAnalysis = useTickStore((s) => s.digitAnalyses[activeSymbol])
+   220→  const connected = useTickStore((s) => s.connected)
+   221→  const livePrice = useTickStore((s) => s.livePrices[activeSymbol])
+   222→
+   223→  const [sortBy, setSortBy] = useState<'confidence' | 'returnPercent'>('confidence')
+   224→  const [selectedCategory, setSelectedCategory] = useState<string>('synthetic')
+   225→
+   226→  const categorySymbols = useMemo(() => {
+   227→    const cat = SYMBOL_CATEGORIES.find(c => c.id === selectedCategory)
+   228→    return cat ? cat.symbols.slice(0, 10) : SYMBOL_CATEGORIES[0].symbols.slice(0, 10)
+   229→  }, [selectedCategory])
+   230→
+   231→  // Determine highlight mode for digit bar
+   232→  const highlightMode = useMemo(() => {
+   233→    switch (marketType) {
+   234→      case 'even_odd': return selectedPrediction === 'Even' ? 'even' as const : 'odd' as const
+   235→      case 'differs': return 'differs' as const
+   236→      case 'over_under': return selectedPrediction === 'Over' ? 'over' as const : 'under' as const
+   237→      default: return 'even' as const
+   238→    }
+   239→  }, [marketType, selectedPrediction])
+   240→
+   241→  // Number of recent ticks to show (5 for differs/matches, 25 for others)
+   242→  const recentTicksLimit = marketType === 'differs' ? 5 : 25
+   243→
+   244→  // Fetch prediction
+   245→  const fetchPrediction = useCallback(async (): Promise<PredictionData | null> => {
+   246→    try {
+   247→      const params = new URLSearchParams({
+   248→        action: 'predict',
+   249→        symbol: activeSymbol,
+   250→        marketType,
+   251→        window: '5',
+   252→      })
+   253→      if (barrier !== undefined) params.set('barrier', String(barrier))
+   254→      if (marketType === 'differs') {
+   255→        const dDigit = parseInt(selectedPrediction.replace('Differs ', ''))
+   256→        if (!isNaN(dDigit)) params.set('differsDigit', String(dDigit))
+   257→      }
+   258→      const res = await fetch(`/api/ticks?${params.toString()}`)
+   259→      if (!res.ok) return null
+   260→      return await res.json()
+   261→    } catch {
+   262→      return null
+   263→    }
+   264→  }, [activeSymbol, marketType, barrier, selectedPrediction])
+   265→
+   266→  const { data: prediction } = useQuery({
+   267→    queryKey: ['prediction', activeSymbol, marketType, barrier, selectedPrediction],
+   268→    queryFn: fetchPrediction,
+   269→    refetchInterval: 2000,
+   270→  })
+   271→
+   272→  // Fetch active symbol analysis (uses real tick data in backend)
+   273→  const { data: analysis, isLoading } = useQuery({
+   274→    queryKey: ['analysis', activeSymbol, marketType, stake, multiplier, barrier],
+   275→    queryFn: async () => {
+   276→      const params = new URLSearchParams({ symbol: activeSymbol, marketType, stake: String(stake) })
+   277→      if (multiplier) params.set('multiplier', String(multiplier))
+   278→      if (barrier !== undefined) params.set('barrier', String(barrier))
+   279→      const res = await fetch(`/api/analysis?${params}`)
+   280→      return res.json() as Promise<AnalysisSignal>
+   281→    },
+   282→    refetchInterval: 10000,
+   283→  })
+   284→
+   285→  // Batch for category
+   286→  const { data: batchData } = useQuery({
+   287→    queryKey: ['batch', marketType, selectedCategory],
+   288→    queryFn: async () => {
+   289→      const res = await fetch('/api/analysis', {
+   290→        method: 'POST',
+   291→        headers: { 'Content-Type': 'application/json' },
+   292→        body: JSON.stringify({ symbols: categorySymbols.map(s => s.symbol), marketType }),
+   293→      })
+   294→      return res.json()
+   295→    },
+   296→    refetchInterval: 15000,
+   297→  })
+   298→
+   299→  const batchAnalyses = useMemo(() => {
+   300→    if (!batchData?.analyses) return []
+   301→    return batchData.analyses.sort((a: AnalysisSignal, b: AnalysisSignal) =>
+   302→      sortBy === 'confidence' ? b.confidence - a.confidence : b.returnPercent - a.returnPercent
+   303→    )
+   304→  }, [batchData, sortBy])
+   305→
+   306→  const summary = batchData?.summary
+   307→  const isInAccumulator = (symbol: string) => accumulatorLegs.some(l => l.symbol === symbol && l.marketType === marketType)
+   308→  const isBuy = analysis?.signal === 'buy' || analysis?.signal === 'strong_buy'
+   309→
+   310→  // Use live price if available, otherwise fall back to analysis data
+   311→  const displayPrice = livePrice?.price || analysis?.entryPrice || 0
+   312→  const displayDigit = livePrice?.lastDigit ?? analysis?.lastDigit ?? digitAnalysis?.lastDigit ?? 0
+   313→
+   314→  return (
+   315→    <div className="space-y-3">
+   316→      {/* ── Live Price Header ── */}
+   317→      <Card className="border-border/50 overflow-hidden">
+   318→        <div className="px-3 py-2 flex items-center justify-between bg-muted/20">
+   319→          <div className="flex items-center gap-2">
+   320→            <div className={cn('h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold', config.bg, config.color)}>
+   321→              {config.label.charAt(0)}
+   322→            </div>
+   323→            <div className="flex-1 min-w-0">
+   324→              <div className="flex items-center gap-1.5">
+   325→                <p className={cn('text-sm font-bold', config.color)}>{config.label}</p>
+   326→                <LivePriceDisplay tvSymbol={activeSymbol} />
+   327→              </div>
+   328→              <p className="text-[10px] text-muted-foreground truncate">{activeSymbol.split(':').pop()}</p>
+   329→            </div>
+   330→          </div>
+   331→          <div className="flex items-center gap-1.5">
+   332→            {connected ? (
+   333→              <Badge variant="outline" className="text-[8px] border-emerald-500/30 text-emerald-400 gap-1">
+   334→                <Wifi className="h-2.5 w-2.5" />
+   335→                LIVE
+   336→              </Badge>
+   337→            ) : (
+   338→              <Badge variant="outline" className="text-[8px] border-muted-foreground/30 text-muted-foreground gap-1">
+   339→                <WifiOff className="h-2.5 w-2.5" />
+   340→                OFFLINE
+   341→              </Badge>
+   342→            )}
+   343→            <Badge variant="outline" className={cn('text-[9px]', config.borderColor, config.bg, config.color)}>
+   344→              {config.shortDesc}
+   345→            </Badge>
+   346→          </div>
+   347→        </div>
+   348→
+   349→        {/* Live Digit Display + Stats */}
+   350→        {digitAnalysis && (
+   351→          <CardContent className="p-3 space-y-3">
+   352→            <div className="flex items-center justify-between">
+   353→              <LastDigitDisplay analysis={digitAnalysis} size="lg" />
+   354→              <div className="text-right">
+   355→                <p className="text-[9px] text-muted-foreground">Live Price</p>
+   356→                <p className="text-lg font-bold font-mono">
+   357→                  {displayPrice >= 10000 ? displayPrice.toFixed(2) : displayPrice >= 1 ? displayPrice.toFixed(4) : displayPrice.toFixed(6)}
+   358→                </p>
+   359→                <p className={cn(
+   360→                  'text-[10px] font-mono',
+   361→                  (digitAnalysis.priceChangePercent || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+   362→                )}>
+   363→                  {(digitAnalysis.priceChangePercent || 0) >= 0 ? '+' : ''}{(digitAnalysis.priceChangePercent || 0).toFixed(4)}%
+   364→                </p>
+   365→              </div>
+   366→            </div>
+   367→
+   368→            {/* Digit Frequency Bar */}
+   369→            <DigitBar
+   370→              analysis={digitAnalysis}
+   371→              highlight={highlightMode}
+   372→              barrier={barrier}
+   373→              differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined}
+   374→            />
+   375→
+   376→            {/* Quick Stats */}
+   377→            <DigitStats analysis={digitAnalysis} marketType={marketType} barrier={barrier} differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined} />
+   378→
+   379→            {/* Recent Ticks — 5 for differs, 25 for others */}
+   380→            <RecentTicks analysis={digitAnalysis} limit={recentTicksLimit} />
+   381→          </CardContent>
+   382→        )}
+   383→      </Card>
+   384→
+   385→      {/* ── PREDICTION CARD ── */}
+   386→      {(marketType === 'even_odd' || marketType === 'differs' || marketType === 'over_under') && (
+   387→        <PredictionCard
+   388→          prediction={prediction}
+   389→          marketType={marketType}
+   390→          config={config}
+   391→        />
+   392→      )}
+   393→
+   394→      {/* ── Prediction Selector ── */}
+   395→      <Card className={cn('border', config.borderColor, config.bg)}>
+   396→        <CardContent className="p-3">
+   397→          <p className="text-[10px] text-muted-foreground font-medium mb-2 uppercase tracking-wider">Prediction</p>
+   398→          <div className="grid grid-cols-3 gap-1.5">
+   399→            {config.predictions.map((pred) => (
+   400→              <button
+   401→                key={pred}
+   402→                type="button"
+   403→                className={cn(
+   404→                  'px-2 py-1.5 rounded-lg text-xs font-medium transition-all border',
+   405→                  selectedPrediction === pred
+   406→                    ? cn('border-current bg-background shadow-sm', config.color)
+   407→                    : 'border-transparent bg-background/50 hover:bg-background text-muted-foreground'
+   408→                )}
+   409→                onClick={() => setSelectedPrediction(pred)}
+   410→              >
+   411→                {pred}
+   412→              </button>
+   413→            ))}
+   414→          </div>
+   415→        </CardContent>
+   416→      </Card>
+   417→
+   418→      {/* ── Duration ── */}
+   419→      <Card>
+   420→        <CardContent className="p-3 space-y-2">
+   421→          <div className="flex items-center justify-between">
+   422→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Duration</p>
+   423→            <Clock className="h-3 w-3 text-muted-foreground" />
+   424→          </div>
+   425→          <div className="flex gap-1.5">
+   426→            <Select
+   427→              value={duration.unit}
+   428→              onValueChange={(unit) => setDuration({ ...duration, unit: unit as Duration['unit'], label: `${duration.value} ${unit}` })}
+   429→            >
+   430→              <SelectTrigger className="h-7 text-[10px] w-20"><SelectValue /></SelectTrigger>
+   431→              <SelectContent>
+   432→                <SelectItem value="ticks"><span className="text-[10px]">Ticks</span></SelectItem>
+   433→                <SelectItem value="seconds"><span className="text-[10px]">Seconds</span></SelectItem>
+   434→                <SelectItem value="minutes"><span className="text-[10px]">Minutes</span></SelectItem>
+   435→                <SelectItem value="hours"><span className="text-[10px]">Hours</span></SelectItem>
+   436→                <SelectItem value="days"><span className="text-[10px]">Days</span></SelectItem>
+   437→              </SelectContent>
+   438→            </Select>
+   439→            <div className="flex gap-0.5 flex-wrap">
+   440→              {(duration.unit === 'ticks' ? TICK_DURATIONS : TIME_DURATIONS)
+   441→                .filter(d => d.unit === duration.unit)
+   442→                .slice(0, 8)
+   443→                .map(d => (
+   444→                  <button
+   445→                    key={d.label}
+   446→                    type="button"
+   447→                    className={cn(
+   448→                      'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+   449→                      d.value === duration.value ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent text-muted-foreground'
+   450→                    )}
+   451→                    onClick={() => setDuration(d)}
+   452→                  >
+   453→                    {d.value}
+   454→                  </button>
+   455→                ))}
+   456→            </div>
+   457→          </div>
+   458→        </CardContent>
+   459→      </Card>
+   460→
+   461→      {/* ── Over/Under barrier ── */}
+   462→      {marketType === 'over_under' && (
+   463→        <Card>
+   464→          <CardContent className="p-3 space-y-2">
+   465→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Barrier (Digit)</p>
+   466→            <div className="flex gap-1">
+   467→              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
+   468→                <button
+   469→                  key={d}
+   470→                  type="button"
+   471→                  className={cn(
+   472→                    'flex-1 py-1.5 rounded text-xs font-bold transition-colors',
+   473→                    barrier === d ? 'bg-sky-500 text-white' : 'bg-muted/50 hover:bg-accent text-muted-foreground'
+   474→                  )}
+   475→                  onClick={() => setBarrier(barrier === d ? undefined : d)}
+   476→                >
+   477→                  {d}
+   478→                </button>
+   479→              ))}
+   480→            </div>
+   481→          </CardContent>
+   482→        </Card>
+   483→      )}
+   484→
+   485→      {/* ── Multiplier selector ── */}
+   486→      {marketType === 'multiplier' && (
+   487→        <Card>
+   488→          <CardContent className="p-3 space-y-2">
+   489→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Multiplier</p>
+   490→            <div className="grid grid-cols-4 gap-1">
+   491→              {[2, 5, 10, 20, 50, 100, 250, 500].map(m => (
+   492→                <button
+   493→                  key={m}
+   494→                  type="button"
+   495→                  className={cn(
+   496→                    'py-1.5 rounded text-xs font-bold transition-colors',
+   497→                    multiplier === m ? 'bg-purple-500 text-white' : 'bg-muted/50 hover:bg-accent text-muted-foreground'
+   498→                  )}
+   499→                  onClick={() => setMultiplier(multiplier === m ? undefined : m)}
+   500→                >
+   501→                  x{m}
+   502→                </button>
+   503→              ))}
+   504→            </div>
+   505→          </CardContent>
+   506→        </Card>
+   507→      )}
+   508→
+   509→      {/* ── Stake + Signal Analysis ── */}
+   510→      {isLoading ? (
+   511→        <Card>
+   512→          <CardContent className="p-4 flex items-center justify-center">
+   513→            <div className="animate-pulse flex items-center gap-2">
+   514→              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+   515→              <span className="text-[11px] text-muted-foreground">Analyzing live data...</span>
+   516→            </div>
+   517→          </CardContent>
+   518→        </Card>
+   519→      ) : analysis ? (
+   520→        <Card className="overflow-hidden">
+   521→          {/* Signal Banner */}
+   522→          <div className={cn(
+   523→            'px-3 py-2 flex items-center justify-between',
+   524→            isBuy ? 'bg-emerald-500/15' : 'bg-red-500/15'
+   525→          )}>
+   526→            <div className="flex items-center gap-2">
+   527→              {isBuy
+   528→                ? <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+   529→                : <TrendingDown className="h-3.5 w-3.5 text-red-400" />
+   530→              }
+   531→              <span className={cn('text-xs font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   532→                {SIGNAL_COLORS[analysis.signal].label}
+   533→              </span>
+   534→            </div>
+   535→            <div className="flex items-center gap-1.5">
+   536→              <span className="text-[10px] text-muted-foreground">Conf.</span>
+   537→              <span className="text-xs font-bold">{analysis.confidence.toFixed(1)}%</span>
+   538→            </div>
+   539→          </div>
+   540→
+   541→          <CardContent className="p-3 space-y-3">
+   542→            {/* Entry Price + Last Digit + Probability */}
+   543→            <div className="flex items-center justify-between">
+   544→              <div>
+   545→                <p className="text-[10px] text-muted-foreground">Entry Price</p>
+   546→                <p className="text-lg font-bold font-mono tracking-tight">{displayPrice.toFixed(2)}</p>
+   547→                {livePrice && (
+   548→                  <p className="text-[8px] text-emerald-400">● Live from Deriv</p>
+   549→                )}
+   550→              </div>
+   551→              <div className="text-center">
+   552→                <p className="text-[10px] text-muted-foreground">Last Digit</p>
+   553→                <div className={cn(
+   554→                  'h-10 w-10 rounded-lg flex items-center justify-center text-lg font-bold',
+   555→                  displayDigit % 2 === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+   556→                )}>
+   557→                  {displayDigit}
+   558→                </div>
+   559→              </div>
+   560→              <div className="text-right">
+   561→                <p className="text-[10px] text-muted-foreground">Probability</p>
+   562→                <p className="text-lg font-bold">{analysis.probability.toFixed(1)}%</p>
+   563→              </div>
+   564→            </div>
+   565→
+   566→            <Progress value={analysis.confidence} className="h-1" />
+   567→
+   568→            {/* Stake Input */}
+   569→            <div className="space-y-1.5">
+   570→              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Stake</p>
+   571→              <div className="relative">
+   572→                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+   573→                <Input
+   574→                  type="number"
+   575→                  min={config.minStake}
+   576→                  max={config.maxStake}
+   577→                  step={0.5}
+   578→                  value={stake}
+   579→                  onChange={(e) => setStake(Math.max(config.minStake, parseFloat(e.target.value) || 0))}
+   580→                  className="pl-7 h-9 text-sm font-bold font-mono"
+   581→                />
+   582→              </div>
+   583→              <div className="flex gap-1">
+   584→                {[1, 5, 10, 25, 50, 100].map(s => (
+   585→                  <button
+   586→                    key={s}
+   587→                    type="button"
+   588→                    className={cn(
+   589→                      'flex-1 py-1 rounded text-[10px] font-medium transition-colors',
+   590→                      stake === s ? 'bg-primary text-primary-foreground' : 'bg-muted/50 hover:bg-accent'
+   591→                    )}
+   592→                    onClick={() => setStake(s)}
+   593→                  >
+   594→                    ${s}
+   595→                  </button>
+   596→                ))}
+   597→              </div>
+   598→            </div>
+   599→
+   600→            {/* Payout Display */}
+   601→            <div className={cn(
+   602→              'rounded-lg p-3 border',
+   603→              isBuy ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'
+   604→            )}>
+   605→              <div className="flex items-center justify-between">
+   606→                <div>
+   607→                  <p className="text-[10px] text-muted-foreground">Potential Payout</p>
+   608→                  <p className={cn('text-xl font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   609→                    ${((stake * analysis.returnPercent) / 100 + stake).toFixed(2)}
+   610→                  </p>
+   611→                </div>
+   612→                <div className="text-right">
+   613→                  <p className="text-[10px] text-muted-foreground">Return</p>
+   614→                  <p className={cn('text-lg font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   615→                    +{analysis.returnPercent.toFixed(1)}%
+   616→                  </p>
+   617→                  {isBuy ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : <ArrowDownRight className="h-4 w-4 text-red-400" />}
+   618→                </div>
+   619→              </div>
+   620→              <Separator className="my-2" />
+   621→              <div className="grid grid-cols-3 gap-2">
+   622→                <div className="text-center">
+   623→                  <p className="text-[9px] text-muted-foreground">Target</p>
+   624→                  <p className="text-[10px] font-bold text-emerald-400">{analysis.target.toFixed(2)}</p>
+   625→                </div>
+   626→                <div className="text-center">
+   627→                  <p className="text-[9px] text-muted-foreground">Stop Loss</p>
+   628→                  <p className="text-[10px] font-bold text-red-400">{analysis.stopLoss.toFixed(2)}</p>
+   629→                </div>
+   630→                <div className="text-center">
+   631→                  <p className="text-[9px] text-muted-foreground">R:R</p>
+   632→                  <p className="text-[10px] font-bold">{analysis.riskReward.toFixed(1)}:1</p>
+   633→                </div>
+   634→              </div>
+   635→            </div>
+   636→
+   637→            {/* Indicators */}
+   638→            <div className="space-y-1">
+   639→              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Indicators</p>
+   640→              {analysis.indicators.map((ind, i) => (
+   641→                <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+   642→                  <div className="min-w-0">
+   643→                    <p className="text-[10px] font-medium truncate">{ind.name}</p>
+   644→                    <p className="text-[9px] text-muted-foreground">{ind.description}</p>
+   645→                  </div>
+   646→                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+   647→                    <span className="text-[10px] font-bold">{String(ind.value)}</span>
+   648→                    <Badge variant="outline" className={cn('text-[8px] px-1 py-0', SIGNAL_COLORS[ind.signal].text)}>
+   649→                      {SIGNAL_COLORS[ind.signal].label}
+   650→                    </Badge>
+   651→                  </div>
+   652→                </div>
+   653→              ))}
+   654→            </div>
+   655→
+   656→            {/* Add to Accumulator */}
+   657→            <Button
+   658→              className={cn('w-full h-8 text-xs font-medium gap-1.5',
+   659→                isInAccumulator(analysis.symbol)
+   660→                  ? 'bg-emerald-600 hover:bg-emerald-700'
+   661→                  : isBuy ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
+   662→              )}
+   663→              variant="outline"
+   664→              disabled={isInAccumulator(analysis.symbol)}
+   665→              onClick={() => addLeg({
+   666→                id: `${analysis.symbol}-${marketType}-${Date.now()}`,
+   667→                symbol: analysis.symbol,
+   668→                name: ALL_SYMBOLS.find(s => s.symbol === analysis.symbol)?.name || analysis.symbol,
+   669→                marketType,
+   670→                signal: analysis.signal,
+   671→                prediction: selectedPrediction,
+   672→                confidence: analysis.confidence,
+   673→                probability: analysis.probability,
+   674→                odds: 1 + analysis.riskReward * 0.5,
+   675→                stake,
+   676→                payout: parseFloat((stake * analysis.returnPercent / 100 + stake).toFixed(2)),
+   677→                entryPrice: displayPrice,
+   678→                target: analysis.target,
+   679→                barrier: analysis.barrier,
+   680→                duration,
+   681→                timeframe: '15m',
+   682→              })}
+   683→            >
+   684→              <Layers className="h-3 w-3" />
+   685→              {isInAccumulator(analysis.symbol) ? '✓ In Accumulator' : 'Add to Accumulator'}
+   686→            </Button>
+   687→          </CardContent>
+   688→        </Card>
+   689→      ) : null}
+   690→
+   691→      {/* ── Market Scan ── */}
+   692→      <Card>
+   693→        <CardContent className="p-3 space-y-2">
+   694→          <div className="flex items-center justify-between">
+   695→            <div className="flex items-center gap-2">
+   696→              <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+   697→              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Market Scan</span>
+   698→            </div>
+   699→            <div className="flex items-center gap-1">
+   700→              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   701→                <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue /></SelectTrigger>
+   702→                <SelectContent>
+   703→                  {SYMBOL_CATEGORIES.map(cat => (
+   704→                    <SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.label}</SelectItem>
+   705→                  ))}
+   706→                </SelectContent>
+   707→              </Select>
+   708→              <Button variant="ghost" size="sm" className={cn('h-6 px-2 text-[9px]', sortBy === 'confidence' && 'bg-accent')} onClick={() => setSortBy('confidence')}>Conf</Button>
+   709→              <Button variant="ghost" size="sm" className={cn('h-6 px-2 text-[9px]', sortBy === 'returnPercent' && 'bg-accent')} onClick={() => setSortBy('returnPercent')}>Return</Button>
+   710→            </div>
+   711→          </div>
+   712→          {summary && (
+   713→            <div className="flex gap-2 text-[9px] text-muted-foreground">
+   714→              <span className={cn(summary.buySignals > summary.sellSignals && 'text-emerald-400 font-medium')}>{summary.buySignals} buy</span>
+   715→              <span className="text-border">|</span>
+   716→              <span className={cn(summary.sellSignals > summary.buySignals && 'text-red-400 font-medium')}>{summary.sellSignals} sell</span>
+   717→              <span className="text-border">|</span>
+   718→              <span>{summary.neutralSignals} neutral</span>
+   719→            </div>
+   720→          )}
+   721→          <ScrollArea className="max-h-[280px]">
+   722→            <div className="space-y-0.5">
+   723→              {batchAnalyses.map((a: AnalysisSignal) => {
+   724→                const sym = ALL_SYMBOLS.find(s => s.symbol === a.symbol)
+   725→                const inAcc = isInAccumulator(a.symbol)
+   726→                const aIsBuy = a.signal === 'buy' || a.signal === 'strong_buy'
+   727→                const symLivePrice = useTickStore.getState().livePrices[a.symbol]
+   728→
+   729→                return (
+   730→                  <div key={a.symbol} className="flex items-center justify-between p-2 rounded-md hover:bg-accent/30 transition-colors group">
+   731→                    <div className="flex items-center gap-2 min-w-0">
+   732→                      <div className={cn(
+   733→                        'h-1.5 w-1.5 rounded-full shrink-0',
+   734→                        aIsBuy ? 'bg-emerald-400' : a.signal === 'neutral' ? 'bg-gray-400' : 'bg-red-400'
+   735→                      )} />
+   736→                      <div className="min-w-0">
+   737→                        <p className="text-[11px] font-medium truncate">{sym?.name || a.symbol.split(':').pop()}</p>
+   738→                        <div className="flex items-center gap-1.5">
+   739→                          <span className="text-[9px] text-muted-foreground">{sym?.exchange}</span>
+   740→                          {symLivePrice ? (
+   741→                            <span className="text-[9px] font-mono text-emerald-400">
+   742→                              D{symLivePrice.lastDigit} ● {symLivePrice.price >= 1 ? symLivePrice.price.toFixed(2) : symLivePrice.price.toFixed(6)}
+   743→                            </span>
+   744→                          ) : (
+   745→                            <span className="text-[9px] text-muted-foreground">D{a.lastDigit}</span>
+   746→                          )}
+   747→                        </div>
+   748→                      </div>
+   749→                    </div>
+   750→                    <div className="flex items-center gap-2 shrink-0">
+   751→                      <span className={cn('text-[10px] font-bold w-8 text-right', aIsBuy ? 'text-emerald-400' : 'text-red-400')}>
+   752→                        {a.returnPercent.toFixed(0)}%
+   753→                      </span>
+   754→                      <span className="text-[9px] text-muted-foreground w-6 text-right">{a.confidence.toFixed(0)}%</span>
+   755→                      <Button
+   756→                        size="sm"
+   757→                        variant={inAcc ? 'default' : 'outline'}
+   758→                        className={cn('h-5 text-[8px] px-1.5', inAcc && 'bg-emerald-600 hover:bg-emerald-700')}
+   759→                        disabled={inAcc}
+   760→                        onClick={() => addLeg({
+   761→                          id: `${a.symbol}-${marketType}-${Date.now()}`,
+   762→                          symbol: a.symbol,
+   763→                          name: sym?.name || a.symbol,
+   764→                          marketType,
+   765→                          signal: a.signal,
+   766→                          prediction: selectedPrediction,
+   767→                          confidence: a.confidence,
+   768→                          probability: a.probability,
+   769→                          odds: 1 + a.riskReward * 0.5,
+   770→                          stake,
+   771→                          payout: parseFloat((stake * a.returnPercent / 100 + stake).toFixed(2)),
+   772→                          entryPrice: a.entryPrice,
+   773→                          target: a.target,
+   774→                          duration,
+   775→                          timeframe: '15m',
+   776→                        })}
+   777→                      >
+   778→                        {inAcc ? '✓' : '+'}
+   779→                      </Button>
+   780→                    </div>
+   781→                  </div>
+   782→                )
+   783→              })}
+   784→            </div>
+   785→          </ScrollArea>
+   786→        </CardContent>
+   787→      </Card>
+   788→    </div>
+   789→  )
+   790→}
+   791→
