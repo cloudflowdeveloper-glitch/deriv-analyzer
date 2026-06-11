@@ -18,11 +18,10 @@ export function useTickFeed() {
   } = useTickStore()
   const activeSymbol = useTradingStore((s) => s.activeSymbol)
 
-  // Fetch from the in-process /api/ticks endpoint
   const fetchTicksApi = useCallback(async (action: string, params?: Record<string, string>): Promise<any | null> => {
     try {
       const qs = new URLSearchParams({ action, ...params })
-      const res = await fetch(`/api/ticks?${qs.toString()}`)
+      const res = await fetch('/api/ticks?' + qs.toString())
       if (!res.ok) return null
       return await res.json()
     } catch {
@@ -30,7 +29,6 @@ export function useTickFeed() {
     }
   }, [])
 
-  // Fetch all prices
   const fetchAllPrices = useCallback(async () => {
     try {
       const data = await fetchTicksApi('all-prices')
@@ -46,7 +44,6 @@ export function useTickFeed() {
     }
   }, [fetchTicksApi, setAllPrices, updateLivePrice, setConnected])
 
-  // Fetch digit analysis for a specific symbol
   const fetchDigits = useCallback(async (symbol: string, barrier?: number) => {
     try {
       const params: Record<string, string> = { symbol }
@@ -62,7 +59,6 @@ export function useTickFeed() {
     }
   }, [fetchTicksApi, setDigitAnalysis, updateLivePrice])
 
-  // Fetch all digit analyses (batch)
   const fetchAllDigits = useCallback(async () => {
     try {
       const allPricesData = await fetchTicksApi('all-prices')
@@ -88,7 +84,6 @@ export function useTickFeed() {
     }
   }, [fetchTicksApi, fetchDigits, setConnected, setLoading])
 
-  // Initial fetch and periodic updates
   useEffect(() => {
     setLoading(true)
     fetchAllPrices()
@@ -103,7 +98,6 @@ export function useTickFeed() {
     }
   }, [fetchAllPrices, fetchAllDigits, setLoading])
 
-  // Fetch digit analysis for active symbol more frequently
   useEffect(() => {
     if (!activeSymbol) return
 
@@ -116,7 +110,6 @@ export function useTickFeed() {
     return () => clearInterval(interval)
   }, [activeSymbol, fetchDigits])
 
-  // Check health
   useEffect(() => {
     const checkHealth = async () => {
       const health = await fetchTicksApi('health')

@@ -30,6 +30,20 @@ interface DigitAnalysis {
   totalTicks: number; pipSize: number
 }
 
+interface Prediction {
+  symbol: string
+  marketType: string
+  prediction: string        // e.g., "Even", "Odd", "Differs", "Matches", "Over", "Under"
+  confidence: number        // 0-100
+  probability: number       // 0-100
+  lastDigit: number
+  recentDigits: number[]    // last 5 digits used for prediction
+  tickCount: number         // how many ticks used
+  streakInfo: string        // streak description
+  reasoning: string         // why this prediction
+  timestamp: string
+}
+
 const DERIV_SYMBOLS = [
   { id: 'R_10',      deriv: 'R_10',      tv: 'DERIV:R_10',      name: 'Volatility 10 Index',     category: 'Synthetic Indices', pipSize: 2 },
   { id: 'R_25',      deriv: 'R_25',      tv: 'DERIV:R_25',      name: 'Volatility 25 Index',     category: 'Synthetic Indices', pipSize: 2 },
@@ -140,11 +154,13 @@ function addTick(id: string, price: number, timestamp: number): void {
   data.streakType = streakType; data.streakLength = streakLen
 }
 
-function getDigitAnalysis(id: string, barrier: number = 4): DigitAnalysis | null {
+function getDigitAnalysis(id: string, barrier: number = 4, windowSize?: number): DigitAnalysis | null {
   const data = symbolDataMap.get(id)
   if (!data) return null
-  const window = data.ticks.slice(-ANALYSIS_WINDOW)
+  const winSize = windowSize || ANALYSIS_WINDOW
+  const window = data.ticks.slice(-winSize)
   const total = window.length
+  if (total === 0) return null
   let oCount = 0, uCount = 0
   for (const t of window) { if (t.lastDigit > barrier) oCount++; else uCount++ }
   return {
@@ -163,6 +179,162 @@ function getDigitAnalysis(id: string, barrier: number = 4): DigitAnalysis | null
     tickSpeed: data.tickSpeed,
     recentTicks: data.ticks.slice(-25).map(t => ({ price: t.price, timestamp: t.timestamp, lastDigit: t.lastDigit })),
     totalTicks: data.ticks.length, pipSize: data.pipSize,
+  }
+}
+
+// ─── PREDICTION ENGINE ─────────────────────────────────────────────
+function generatePrediction(id: string, marketType: string, barrier: number = 4, differsDigit?: number, windowSize: number = 5): Prediction | null {
+  const data = symbolDataMap.get(id)
+  if (!data || data.ticks.length < 3) return null
+
+  const recent = data.ticks.slice(-windowSize)
+  if (recent.length < 3) return null
+
+  const lastDigit = data.lastDigit
+  const digits = recent.map(t => t.lastDigit)
+  const n = digits.length
+
+  // Compute streak
+  let streakType = lastDigit % 2 === 0 ? 'even' : 'odd'
+  let streakLen = 1
+  for (let i = recent.length - 2; i >= 0; i--) {
+    const t = recent[i].lastDigit % 2 === 0 ? 'even' : 'odd'
+    if (t === streakType) streakLen++; else break
+  }
+  const streakInfo = `${streakLen} consecutive ${streakType}`
+
+  let prediction = ''
+  let confidence = 50
+  let probability = 50
+  let reasoning = ''
+
+  if (marketType === 'even_odd') {
+    const evenCount = digits.filter(d => d % 2 === 0).length
+    const oddCount = n - evenCount
+
+    // Regression to mean: predict the less frequent one
+    if (evenCount > oddCount) {
+      prediction = 'Odd'
+      confidence = Math.min(50 + evenCount * 7, 88)
+      probability = Math.min(55 + evenCount * 5, 82)
+      reasoning = `Last ${n} ticks: ${evenCount} even, ${oddCount} odd. ${streakLen}-${streakType} streak. Predicting regression to ${prediction.toLowerCase()}.`
+    } else if (oddCount > evenCount) {
+      prediction = 'Even'
+      confidence = Math.min(50 + oddCount * 7, 88)
+      probability = Math.min(55 + oddCount * 5, 82)
+      reasoning = `Last ${n} ticks: ${evenCount} even, ${oddCount} odd. ${streakLen}-${streakType} streak. Predicting regression to ${prediction.toLowerCase()}.`
+    } else {
+      prediction = evenCount >= oddCount ? 'Even' : 'Odd'
+      confidence = 52
+      probability = 52
+      reasoning = `Last ${n} ticks are balanced (${evenCount} even, ${oddCount} odd). Weak ${prediction.toLowerCase()} signal.`
+    }
+
+    // Adjust for streaks: long streaks increase confidence for break
+    if (streakLen >= 3) {
+      const breakPrediction = streakType === 'even' ? 'Odd' : 'Even'
+      prediction = breakPrediction
+      confidence = Math.min(confidence + streakLen * 5, 92)
+      probability = Math.min(probability + streakLen * 3, 85)
+      reasoning += ` Streak break likely after ${streakLen} consecutive.`
+    }
+  }
+
+  else if (marketType === 'differs') {
+    const target = differsDigit ?? lastDigit
+    const matchCount = digits.filter(d => d === target).length
+
+    if (matchCount >= 2) {
+      // Target digit appeared often — regression says it'll differ
+      prediction = 'Differs'
+      confidence = Math.min(60 + matchCount * 8, 90)
+      probability = Math.min(65 + matchCount * 5, 88)
+      reasoning = `Digit ${target} appeared ${matchCount}/${n} times recently. Regression suggests it will differ next.`
+    } else {
+      prediction = 'Differs'
+      confidence = 55
+      probability = 55
+      reasoning = `Digit ${target} appeared ${matchCount}/${n} times. Slight edge for differs.`
+    }
+
+    // Also provide a "matches" assessment
+    if (matchCount === 0) {
+      prediction = 'Differs'
+      confidence = Math.min(70, 82)
+      probability = 78
+      reasoning = `Digit ${target} hasn't appeared in last ${n} ticks. High probability it will differ.`
+    }
+  }
+
+  else if (marketType === 'matches') {
+    const target = differsDigit ?? lastDigit
+    const matchCount = digits.filter(d => d === target).length
+
+    if (matchCount >= 2) {
+      prediction = 'Matches'
+      confidence = Math.min(45 + matchCount * 8, 78)
+      probability = Math.min(40 + matchCount * 6, 72)
+      reasoning = `Digit ${target} is hot — appeared ${matchCount}/${n} times. May match again.`
+    } else if (matchCount === 1) {
+      prediction = 'Matches'
+      confidence = 35
+      probability = 30
+      reasoning = `Digit ${target} appeared once in last ${n} ticks. Low match probability.`
+    } else {
+      prediction = 'Matches'
+      confidence = 22
+      probability = 18
+      reasoning = `Digit ${target} hasn't appeared in last ${n} ticks. Unlikely to match.`
+    }
+  }
+
+  else if (marketType === 'over_under') {
+    const overCount = digits.filter(d => d > barrier).length
+    const underCount = n - overCount
+
+    if (overCount > underCount) {
+      prediction = 'Under'
+      confidence = Math.min(50 + overCount * 7, 88)
+      probability = Math.min(55 + overCount * 5, 82)
+      reasoning = `Last ${n} ticks: ${overCount} over ${barrier}, ${underCount} under. Regression predicts under.`
+    } else if (underCount > overCount) {
+      prediction = 'Over'
+      confidence = Math.min(50 + underCount * 7, 88)
+      probability = Math.min(55 + underCount * 5, 82)
+      reasoning = `Last ${n} ticks: ${overCount} over ${barrier}, ${underCount} under. Regression predicts over.`
+    } else {
+      prediction = overCount >= underCount ? 'Over' : 'Under'
+      confidence = 52
+      probability = 52
+      reasoning = `Last ${n} ticks balanced around ${barrier}. Weak signal.`
+    }
+
+    // Adjust for digit streaks near barrier
+    if (streakLen >= 3) {
+      const lastDigits = digits.slice(-3)
+      const allOver = lastDigits.every(d => d > barrier)
+      const allUnder = lastDigits.every(d => d <= barrier)
+      if (allOver || allUnder) {
+        const breakPred = allOver ? 'Under' : 'Over'
+        prediction = breakPred
+        confidence = Math.min(confidence + streakLen * 4, 90)
+        reasoning += ` Streak break expected.`
+      }
+    }
+  }
+
+  return {
+    symbol: data.symbol,
+    marketType,
+    prediction,
+    confidence: parseFloat(confidence.toFixed(1)),
+    probability: parseFloat(probability.toFixed(1)),
+    lastDigit,
+    recentDigits: digits,
+    tickCount: n,
+    streakInfo,
+    reasoning,
+    timestamp: new Date().toISOString(),
   }
 }
 
@@ -290,14 +462,34 @@ const httpServer = createServer((req, res) => {
     if (pathname === '/api/digits') {
       const symbol = parsedUrl.searchParams.get('symbol') || ''
       const barrier = parseInt(parsedUrl.searchParams.get('barrier') || '4')
+      const windowSize = parseInt(parsedUrl.searchParams.get('window') || String(ANALYSIS_WINDOW))
       const config = DERIV_SYMBOLS.find(s => s.id === symbol || s.deriv === symbol || s.tv === symbol)
-      const analysis = getDigitAnalysis(config?.id || symbol, barrier)
+      const analysis = getDigitAnalysis(config?.id || symbol, barrier, windowSize)
       if (analysis) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(analysis))
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Symbol not found', symbol }))
+      }
+      return
+    }
+    // ─── PREDICTION ENDPOINT ──────────────────────────────────────
+    if (pathname === '/api/predict') {
+      const symbol = parsedUrl.searchParams.get('symbol') || ''
+      const marketType = parsedUrl.searchParams.get('marketType') || 'even_odd'
+      const barrier = parseInt(parsedUrl.searchParams.get('barrier') || '4')
+      const differsDigit = parsedUrl.searchParams.has('differsDigit')
+        ? parseInt(parsedUrl.searchParams.get('differsDigit')!) : undefined
+      const windowSize = parseInt(parsedUrl.searchParams.get('window') || '5')
+      const config = DERIV_SYMBOLS.find(s => s.id === symbol || s.deriv === symbol || s.tv === symbol)
+      const prediction = generatePrediction(config?.id || symbol, marketType, barrier, differsDigit, windowSize)
+      if (prediction) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(prediction))
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Insufficient data', symbol }))
       }
       return
     }

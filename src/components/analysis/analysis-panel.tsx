@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTradingStore } from '@/stores/trading-store'
 import { useTickStore } from '@/stores/tick-store'
@@ -17,10 +17,191 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Activity, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Layers, ChevronUp, ChevronDown, Clock, Hash, DollarSign,
-  Target, Zap, BarChart3, Wifi, WifiOff
+  Target, Zap, BarChart3, Wifi, WifiOff, Brain, ArrowRight,
+  CheckCircle2, XCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// ─── Prediction types ───────────────────────────────────────────
+interface PredictionData {
+  symbol: string
+  marketType: string
+  prediction: string
+  confidence: number
+  probability: number
+  lastDigit: number
+  recentDigits: number[]
+  tickCount: number
+  streakInfo: string
+  reasoning: string
+  timestamp: string
+}
+
+// ─── Prediction Card ──────────────────────────────────────────────
+function PredictionCard({ prediction, marketType, config }: {
+  prediction: PredictionData | undefined
+  marketType: MarketType
+  config: typeof MARKET_TYPES[MarketType]
+}) {
+  if (!prediction) return null
+
+  const isPositive = ['Even', 'Over', 'Differs'].includes(prediction.prediction)
+  const confidenceLevel = prediction.confidence >= 75 ? 'high' : prediction.confidence >= 55 ? 'medium' : 'low'
+  const confidenceColor = {
+    high: 'text-emerald-400',
+    medium: 'text-amber-400',
+    low: 'text-gray-400'
+  }[confidenceLevel]
+
+  const predictionBg = {
+    even_odd: 'bg-gradient-to-r from-emerald-500/10 to-rose-500/10',
+    differs: 'bg-gradient-to-r from-orange-500/10 to-amber-500/10',
+    over_under: 'bg-gradient-to-r from-sky-500/10 to-amber-500/10',
+    multiplier: 'bg-gradient-to-r from-purple-500/10 to-emerald-500/10',
+    higher_lower: 'bg-gradient-to-r from-rose-500/10 to-emerald-500/10',
+    turbo: 'bg-gradient-to-r from-amber-500/10 to-rose-500/10',
+  }[marketType] || 'bg-muted/20'
+
+  return (
+    <Card className={cn('overflow-hidden border', config.borderColor, predictionBg)}>
+      <div className={cn(
+        'px-3 py-1.5 flex items-center justify-between',
+        'bg-gradient-to-r',
+        isPositive
+          ? 'from-emerald-500/15 via-emerald-500/5 to-transparent'
+          : 'from-rose-500/15 via-rose-500/5 to-transparent'
+      )}>
+        <div className="flex items-center gap-1.5">
+          <Brain className={cn('h-3.5 w-3.5', config.color)} />
+          <span className={cn('text-[10px] font-bold uppercase tracking-wider', config.color)}>AI Prediction</span>
+        </div>
+        <Badge variant="outline" className={cn('text-[8px]', confidenceColor, config.borderColor)}>
+          {confidenceLevel.toUpperCase()}
+        </Badge>
+      </div>
+
+      <CardContent className="p-3 space-y-2.5">
+        {/* Main Prediction */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              'h-12 w-12 rounded-xl flex items-center justify-center text-lg font-black',
+              'ring-1 ring-offset-1 ring-offset-background',
+              isPositive
+                ? 'bg-emerald-500/20 text-emerald-400 ring-emerald-500/30'
+                : 'bg-rose-500/20 text-rose-400 ring-rose-500/30'
+            )}>
+              {prediction.prediction === 'Even' ? 'EVN' :
+               prediction.prediction === 'Odd' ? 'ODD' :
+               prediction.prediction === 'Over' ? 'OV↑' :
+               prediction.prediction === 'Under' ? 'UN↓' :
+               prediction.prediction === 'Differs' ? '≠' :
+               prediction.prediction === 'Matches' ? '=' :
+               prediction.prediction.slice(0, 3).toUpperCase()}
+            </div>
+            <div>
+              <p className={cn('text-base font-bold', isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                {prediction.prediction}
+              </p>
+              <p className="text-[9px] text-muted-foreground">
+                Last digit: <span className="font-mono font-bold text-foreground">{prediction.lastDigit}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className={cn('text-2xl font-black', confidenceColor)}>
+              {prediction.confidence.toFixed(0)}%
+            </p>
+            <p className="text-[8px] text-muted-foreground uppercase">Confidence</p>
+          </div>
+        </div>
+
+        {/* Confidence bar */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[9px]">
+            <span className="text-muted-foreground">Prediction Strength</span>
+            <span className={cn('font-bold', confidenceColor)}>{prediction.probability.toFixed(0)}% probability</span>
+          </div>
+          <Progress
+            value={prediction.confidence}
+            className={cn('h-2', isPositive ? '[&>div]:bg-emerald-500' : '[&>div]:bg-rose-500')}
+          />
+        </div>
+
+        {/* Recent digits used for prediction */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[8px] text-muted-foreground shrink-0">Last {prediction.tickCount}:</span>
+          <div className="flex gap-0.5">
+            {prediction.recentDigits.map((d, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold',
+                  d === prediction.lastDigit
+                    ? 'bg-primary text-primary-foreground ring-1 ring-primary/30'
+                    : d % 2 === 0
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-rose-500/20 text-rose-400'
+                )}
+              >
+                {d}
+              </div>
+            ))}
+            <div className="flex items-center justify-center h-5 w-5">
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            </div>
+            <div className={cn(
+              'h-5 w-5 flex items-center justify-center rounded text-[9px] font-bold animate-pulse',
+              isPositive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-rose-500/30 text-rose-300'
+            )}>
+              ?
+            </div>
+          </div>
+        </div>
+
+        {/* Streak info */}
+        {prediction.streakInfo && (
+          <div className="flex items-center gap-1.5 text-[9px]">
+            <Zap className="h-3 w-3 text-amber-400" />
+            <span className="text-muted-foreground">{prediction.streakInfo}</span>
+          </div>
+        )}
+
+        {/* Reasoning */}
+        <p className="text-[9px] text-muted-foreground leading-relaxed italic">
+          {prediction.reasoning}
+        </p>
+
+        {/* For Differs: show Match vs Differs comparison */}
+        {marketType === 'differs' && (
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className={cn(
+              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+              prediction.prediction === 'Differs'
+                ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                : 'bg-muted/30 text-muted-foreground'
+            )}>
+              {prediction.prediction === 'Differs' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+              Differs
+            </div>
+            <div className={cn(
+              'flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold',
+              prediction.prediction === 'Matches'
+                ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                : 'bg-muted/30 text-muted-foreground'
+            )}>
+              {prediction.prediction === 'Matches' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+              Matches
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Analysis Panel ──────────────────────────────────────────────
 interface AnalysisPanelProps {
   marketType: MarketType
 }
@@ -40,7 +221,7 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
   const livePrice = useTickStore((s) => s.livePrices[activeSymbol])
 
   const [sortBy, setSortBy] = useState<'confidence' | 'returnPercent'>('confidence')
-  const [selectedCategory, setSelectedCategory] = useState<string>('crypto')
+  const [selectedCategory, setSelectedCategory] = useState<string>('synthetic')
 
   const categorySymbols = useMemo(() => {
     const cat = SYMBOL_CATEGORIES.find(c => c.id === selectedCategory)
@@ -56,6 +237,37 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
       default: return 'even' as const
     }
   }, [marketType, selectedPrediction])
+
+  // Number of recent ticks to show (5 for differs/matches, 25 for others)
+  const recentTicksLimit = marketType === 'differs' ? 5 : 25
+
+  // Fetch prediction
+  const fetchPrediction = useCallback(async (): Promise<PredictionData | null> => {
+    try {
+      const params = new URLSearchParams({
+        action: 'predict',
+        symbol: activeSymbol,
+        marketType,
+        window: '5',
+      })
+      if (barrier !== undefined) params.set('barrier', String(barrier))
+      if (marketType === 'differs') {
+        const dDigit = parseInt(selectedPrediction.replace('Differs ', ''))
+        if (!isNaN(dDigit)) params.set('differsDigit', String(dDigit))
+      }
+      const res = await fetch(`/api/ticks?${params.toString()}`)
+      if (!res.ok) return null
+      return await res.json()
+    } catch {
+      return null
+    }
+  }, [activeSymbol, marketType, barrier, selectedPrediction])
+
+  const { data: prediction } = useQuery({
+    queryKey: ['prediction', activeSymbol, marketType, barrier, selectedPrediction],
+    queryFn: fetchPrediction,
+    refetchInterval: 2000,
+  })
 
   // Fetch active symbol analysis (uses real tick data in backend)
   const { data: analysis, isLoading } = useQuery({
@@ -164,11 +376,20 @@ export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
             {/* Quick Stats */}
             <DigitStats analysis={digitAnalysis} marketType={marketType} barrier={barrier} differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined} />
 
-            {/* Recent Ticks */}
-            <RecentTicks analysis={digitAnalysis} />
+            {/* Recent Ticks — 5 for differs, 25 for others */}
+            <RecentTicks analysis={digitAnalysis} limit={recentTicksLimit} />
           </CardContent>
         )}
       </Card>
+
+      {/* ── PREDICTION CARD ── */}
+      {(marketType === 'even_odd' || marketType === 'differs' || marketType === 'over_under') && (
+        <PredictionCard
+          prediction={prediction}
+          marketType={marketType}
+          config={config}
+        />
+      )}
 
       {/* ── Prediction Selector ── */}
       <Card className={cn('border', config.borderColor, config.bg)}>

@@ -21,3 +21,28 @@ Stage Summary:
 - TradingView charts load without "Invalid symbol" errors
 - Digit analysis panel shows live data for all symbols
 - All 9 tabs (Even/Odd, Differs, Over/Under, Multiplier, Rise/Fall, Turbo, Accumulator, Chart, Overview) working
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add predictions, minimize ticks to 5 in Differs, fix tick-feed proxy route
+
+Work Log:
+- Fixed `/api/tick-feed/route.ts` — added action→path mapping (was broken, always defaulting to health endpoint)
+- Added `getPrediction()` function to `src/lib/deriv-ticks.ts` with regression-to-mean prediction engine
+- Added `predict` action to `/api/ticks/route.ts` endpoint
+- Updated `src/hooks/use-tick-feed.ts` — fixed backtick encoding issue, ensured `/api/ticks` route
+- Updated `src/components/analysis/analysis-panel.tsx`:
+  - Added `PredictionCard` component with visual confidence bars, last 5 digits display, reasoning text
+  - Shows prediction for Even/Odd (predict even or odd), Differs (predict match or differ), Over/Under (predict over or under)
+  - Prediction updates every 2 seconds via useQuery
+  - Differs tab shows Differs vs Matches comparison buttons
+- Updated `src/components/ticks/digit-analysis.tsx` — `RecentTicks` now accepts `limit` prop
+- Differs tab shows only 5 recent ticks (limit=5), other tabs show 25
+
+Stage Summary:
+- Prediction engine uses last 5 ticks with regression-to-mean strategy
+- Streak-aware: long streaks boost confidence for streak-break predictions
+- AI Prediction card shows: prediction, confidence %, probability %, last 5 digits, streak info, reasoning
+- Verified via agent browser: all 3 prediction tabs (Even/Odd, Differs, Over/Under) render correctly
+- Dev server running cleanly, all API endpoints returning 200

@@ -6,6 +6,7 @@ import {
   getAllPrices,
   resolveSymbol,
   getHealth,
+  getPrediction,
   DERIV_SYMBOLS,
 } from '@/lib/deriv-ticks'
 
@@ -76,7 +77,26 @@ export async function GET(request: Request) {
       })
     }
 
+    case 'predict': {
+      const symbol = searchParams.get('symbol') || ''
+      const marketType = searchParams.get('marketType') || 'even_odd'
+      const barrier = parseInt(searchParams.get('barrier') || '4')
+      const differsDigit = searchParams.has('differsDigit')
+        ? parseInt(searchParams.get('differsDigit')!)
+        : undefined
+      const windowSize = parseInt(searchParams.get('window') || '5')
+      const resolvedId = resolveSymbol(symbol)
+      if (!resolvedId) {
+        return NextResponse.json({ error: 'Symbol not found', symbol }, { status: 404 })
+      }
+      const prediction = getPrediction(resolvedId, marketType, barrier, differsDigit, windowSize)
+      if (!prediction) {
+        return NextResponse.json({ error: 'Insufficient data', symbol }, { status: 404 })
+      }
+      return NextResponse.json(prediction)
+    }
+
     default:
-      return NextResponse.json({ error: 'Unknown action', available: ['health', 'all-prices', 'price', 'digits', 'symbols'] }, { status: 400 })
+      return NextResponse.json({ error: 'Unknown action', available: ['health', 'all-prices', 'price', 'digits', 'symbols', 'predict'] }, { status: 400 })
   }
 }

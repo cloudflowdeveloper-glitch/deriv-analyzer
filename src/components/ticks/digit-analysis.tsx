@@ -255,17 +255,22 @@ export function DigitStats({ analysis, marketType, barrier = 4, differsDigit, cl
 // Recent ticks table
 interface RecentTicksProps {
   analysis: DigitAnalysis | undefined
+  limit?: number
   className?: string
 }
 
-export function RecentTicks({ analysis, className }: RecentTicksProps) {
+export function RecentTicks({ analysis, limit = 25, className }: RecentTicksProps) {
   if (!analysis || analysis.recentTicks.length === 0) return null
+
+  const ticks = analysis.recentTicks.slice(-limit).reverse()
 
   return (
     <div className={cn('space-y-1', className)}>
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Recent Ticks</p>
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
+        Recent Ticks{limit < 25 ? ` (last ${limit})` : ''}
+      </p>
       <div className="space-y-0.5 max-h-40 overflow-y-auto">
-        {analysis.recentTicks.slice().reverse().map((tick, i) => {
+        {ticks.map((tick, i) => {
           const isEven = tick.lastDigit % 2 === 0
           const time = new Date(tick.timestamp)
           const timeStr = `${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}.${time.getMilliseconds().toString().padStart(3, '0')}`

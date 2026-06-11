@@ -1,0 +1,570 @@
+     1→'use client'
+     2→
+     3→import { useState, useMemo } from 'react'
+     4→import { useQuery } from '@tanstack/react-query'
+     5→import { useTradingStore } from '@/stores/trading-store'
+     6→import { useTickStore } from '@/stores/tick-store'
+     7→import { MarketType, MARKET_TYPES, SIGNAL_COLORS, ALL_SYMBOLS, SYMBOL_CATEGORIES, AnalysisSignal, TICK_DURATIONS, TIME_DURATIONS, Duration } from '@/lib/trading-types'
+     8→import { DigitBar, LastDigitDisplay, LivePriceDisplay, DigitStats, RecentTicks } from '@/components/ticks/digit-analysis'
+     9→import { Card, CardContent } from '@/components/ui/card'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Button } from '@/components/ui/button'
+    12→import { Input } from '@/components/ui/input'
+    13→import { Progress } from '@/components/ui/progress'
+    14→import { ScrollArea } from '@/components/ui/scroll-area'
+    15→import { Separator } from '@/components/ui/separator'
+    16→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    17→import {
+    18→  Activity, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
+    19→  Layers, ChevronUp, ChevronDown, Clock, Hash, DollarSign,
+    20→  Target, Zap, BarChart3, Wifi, WifiOff
+    21→} from 'lucide-react'
+    22→import { cn } from '@/lib/utils'
+    23→
+    24→interface AnalysisPanelProps {
+    25→  marketType: MarketType
+    26→}
+    27→
+    28→export function AnalysisPanel({ marketType }: AnalysisPanelProps) {
+    29→  const config = MARKET_TYPES[marketType]
+    30→  const {
+    31→    activeSymbol, stake, setStake, duration, setDuration,
+    32→    selectedPrediction, setSelectedPrediction, barrier, setBarrier,
+    33→    multiplier, setMultiplier,
+    34→    accumulatorLegs, addLeg
+    35→  } = useTradingStore()
+    36→
+    37→  // Live tick data
+    38→  const digitAnalysis = useTickStore((s) => s.digitAnalyses[activeSymbol])
+    39→  const connected = useTickStore((s) => s.connected)
+    40→  const livePrice = useTickStore((s) => s.livePrices[activeSymbol])
+    41→
+    42→  const [sortBy, setSortBy] = useState<'confidence' | 'returnPercent'>('confidence')
+    43→  const [selectedCategory, setSelectedCategory] = useState<string>('crypto')
+    44→
+    45→  const categorySymbols = useMemo(() => {
+    46→    const cat = SYMBOL_CATEGORIES.find(c => c.id === selectedCategory)
+    47→    return cat ? cat.symbols.slice(0, 10) : SYMBOL_CATEGORIES[0].symbols.slice(0, 10)
+    48→  }, [selectedCategory])
+    49→
+    50→  // Determine highlight mode for digit bar
+    51→  const highlightMode = useMemo(() => {
+    52→    switch (marketType) {
+    53→      case 'even_odd': return selectedPrediction === 'Even' ? 'even' as const : 'odd' as const
+    54→      case 'differs': return 'differs' as const
+    55→      case 'over_under': return selectedPrediction === 'Over' ? 'over' as const : 'under' as const
+    56→      default: return 'even' as const
+    57→    }
+    58→  }, [marketType, selectedPrediction])
+    59→
+    60→  // Fetch active symbol analysis (uses real tick data in backend)
+    61→  const { data: analysis, isLoading } = useQuery({
+    62→    queryKey: ['analysis', activeSymbol, marketType, stake, multiplier, barrier],
+    63→    queryFn: async () => {
+    64→      const params = new URLSearchParams({ symbol: activeSymbol, marketType, stake: String(stake) })
+    65→      if (multiplier) params.set('multiplier', String(multiplier))
+    66→      if (barrier !== undefined) params.set('barrier', String(barrier))
+    67→      const res = await fetch(`/api/analysis?${params}`)
+    68→      return res.json() as Promise<AnalysisSignal>
+    69→    },
+    70→    refetchInterval: 10000,
+    71→  })
+    72→
+    73→  // Batch for category
+    74→  const { data: batchData } = useQuery({
+    75→    queryKey: ['batch', marketType, selectedCategory],
+    76→    queryFn: async () => {
+    77→      const res = await fetch('/api/analysis', {
+    78→        method: 'POST',
+    79→        headers: { 'Content-Type': 'application/json' },
+    80→        body: JSON.stringify({ symbols: categorySymbols.map(s => s.symbol), marketType }),
+    81→      })
+    82→      return res.json()
+    83→    },
+    84→    refetchInterval: 15000,
+    85→  })
+    86→
+    87→  const batchAnalyses = useMemo(() => {
+    88→    if (!batchData?.analyses) return []
+    89→    return batchData.analyses.sort((a: AnalysisSignal, b: AnalysisSignal) =>
+    90→      sortBy === 'confidence' ? b.confidence - a.confidence : b.returnPercent - a.returnPercent
+    91→    )
+    92→  }, [batchData, sortBy])
+    93→
+    94→  const summary = batchData?.summary
+    95→  const isInAccumulator = (symbol: string) => accumulatorLegs.some(l => l.symbol === symbol && l.marketType === marketType)
+    96→  const isBuy = analysis?.signal === 'buy' || analysis?.signal === 'strong_buy'
+    97→
+    98→  // Use live price if available, otherwise fall back to analysis data
+    99→  const displayPrice = livePrice?.price || analysis?.entryPrice || 0
+   100→  const displayDigit = livePrice?.lastDigit ?? analysis?.lastDigit ?? digitAnalysis?.lastDigit ?? 0
+   101→
+   102→  return (
+   103→    <div className="space-y-3">
+   104→      {/* ── Live Price Header ── */}
+   105→      <Card className="border-border/50 overflow-hidden">
+   106→        <div className="px-3 py-2 flex items-center justify-between bg-muted/20">
+   107→          <div className="flex items-center gap-2">
+   108→            <div className={cn('h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold', config.bg, config.color)}>
+   109→              {config.label.charAt(0)}
+   110→            </div>
+   111→            <div className="flex-1 min-w-0">
+   112→              <div className="flex items-center gap-1.5">
+   113→                <p className={cn('text-sm font-bold', config.color)}>{config.label}</p>
+   114→                <LivePriceDisplay tvSymbol={activeSymbol} />
+   115→              </div>
+   116→              <p className="text-[10px] text-muted-foreground truncate">{activeSymbol.split(':').pop()}</p>
+   117→            </div>
+   118→          </div>
+   119→          <div className="flex items-center gap-1.5">
+   120→            {connected ? (
+   121→              <Badge variant="outline" className="text-[8px] border-emerald-500/30 text-emerald-400 gap-1">
+   122→                <Wifi className="h-2.5 w-2.5" />
+   123→                LIVE
+   124→              </Badge>
+   125→            ) : (
+   126→              <Badge variant="outline" className="text-[8px] border-muted-foreground/30 text-muted-foreground gap-1">
+   127→                <WifiOff className="h-2.5 w-2.5" />
+   128→                OFFLINE
+   129→              </Badge>
+   130→            )}
+   131→            <Badge variant="outline" className={cn('text-[9px]', config.borderColor, config.bg, config.color)}>
+   132→              {config.shortDesc}
+   133→            </Badge>
+   134→          </div>
+   135→        </div>
+   136→
+   137→        {/* Live Digit Display + Stats */}
+   138→        {digitAnalysis && (
+   139→          <CardContent className="p-3 space-y-3">
+   140→            <div className="flex items-center justify-between">
+   141→              <LastDigitDisplay analysis={digitAnalysis} size="lg" />
+   142→              <div className="text-right">
+   143→                <p className="text-[9px] text-muted-foreground">Live Price</p>
+   144→                <p className="text-lg font-bold font-mono">
+   145→                  {displayPrice >= 10000 ? displayPrice.toFixed(2) : displayPrice >= 1 ? displayPrice.toFixed(4) : displayPrice.toFixed(6)}
+   146→                </p>
+   147→                <p className={cn(
+   148→                  'text-[10px] font-mono',
+   149→                  (digitAnalysis.priceChangePercent || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+   150→                )}>
+   151→                  {(digitAnalysis.priceChangePercent || 0) >= 0 ? '+' : ''}{(digitAnalysis.priceChangePercent || 0).toFixed(4)}%
+   152→                </p>
+   153→              </div>
+   154→            </div>
+   155→
+   156→            {/* Digit Frequency Bar */}
+   157→            <DigitBar
+   158→              analysis={digitAnalysis}
+   159→              highlight={highlightMode}
+   160→              barrier={barrier}
+   161→              differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined}
+   162→            />
+   163→
+   164→            {/* Quick Stats */}
+   165→            <DigitStats analysis={digitAnalysis} marketType={marketType} barrier={barrier} differsDigit={parseInt(selectedPrediction.replace('Differs ', '')) || undefined} />
+   166→
+   167→            {/* Recent Ticks */}
+   168→            <RecentTicks analysis={digitAnalysis} />
+   169→          </CardContent>
+   170→        )}
+   171→      </Card>
+   172→
+   173→      {/* ── Prediction Selector ── */}
+   174→      <Card className={cn('border', config.borderColor, config.bg)}>
+   175→        <CardContent className="p-3">
+   176→          <p className="text-[10px] text-muted-foreground font-medium mb-2 uppercase tracking-wider">Prediction</p>
+   177→          <div className="grid grid-cols-3 gap-1.5">
+   178→            {config.predictions.map((pred) => (
+   179→              <button
+   180→                key={pred}
+   181→                type="button"
+   182→                className={cn(
+   183→                  'px-2 py-1.5 rounded-lg text-xs font-medium transition-all border',
+   184→                  selectedPrediction === pred
+   185→                    ? cn('border-current bg-background shadow-sm', config.color)
+   186→                    : 'border-transparent bg-background/50 hover:bg-background text-muted-foreground'
+   187→                )}
+   188→                onClick={() => setSelectedPrediction(pred)}
+   189→              >
+   190→                {pred}
+   191→              </button>
+   192→            ))}
+   193→          </div>
+   194→        </CardContent>
+   195→      </Card>
+   196→
+   197→      {/* ── Duration ── */}
+   198→      <Card>
+   199→        <CardContent className="p-3 space-y-2">
+   200→          <div className="flex items-center justify-between">
+   201→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Duration</p>
+   202→            <Clock className="h-3 w-3 text-muted-foreground" />
+   203→          </div>
+   204→          <div className="flex gap-1.5">
+   205→            <Select
+   206→              value={duration.unit}
+   207→              onValueChange={(unit) => setDuration({ ...duration, unit: unit as Duration['unit'], label: `${duration.value} ${unit}` })}
+   208→            >
+   209→              <SelectTrigger className="h-7 text-[10px] w-20"><SelectValue /></SelectTrigger>
+   210→              <SelectContent>
+   211→                <SelectItem value="ticks"><span className="text-[10px]">Ticks</span></SelectItem>
+   212→                <SelectItem value="seconds"><span className="text-[10px]">Seconds</span></SelectItem>
+   213→                <SelectItem value="minutes"><span className="text-[10px]">Minutes</span></SelectItem>
+   214→                <SelectItem value="hours"><span className="text-[10px]">Hours</span></SelectItem>
+   215→                <SelectItem value="days"><span className="text-[10px]">Days</span></SelectItem>
+   216→              </SelectContent>
+   217→            </Select>
+   218→            <div className="flex gap-0.5 flex-wrap">
+   219→              {(duration.unit === 'ticks' ? TICK_DURATIONS : TIME_DURATIONS)
+   220→                .filter(d => d.unit === duration.unit)
+   221→                .slice(0, 8)
+   222→                .map(d => (
+   223→                  <button
+   224→                    key={d.label}
+   225→                    type="button"
+   226→                    className={cn(
+   227→                      'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+   228→                      d.value === duration.value ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent text-muted-foreground'
+   229→                    )}
+   230→                    onClick={() => setDuration(d)}
+   231→                  >
+   232→                    {d.value}
+   233→                  </button>
+   234→                ))}
+   235→            </div>
+   236→          </div>
+   237→        </CardContent>
+   238→      </Card>
+   239→
+   240→      {/* ── Over/Under barrier ── */}
+   241→      {marketType === 'over_under' && (
+   242→        <Card>
+   243→          <CardContent className="p-3 space-y-2">
+   244→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Barrier (Digit)</p>
+   245→            <div className="flex gap-1">
+   246→              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
+   247→                <button
+   248→                  key={d}
+   249→                  type="button"
+   250→                  className={cn(
+   251→                    'flex-1 py-1.5 rounded text-xs font-bold transition-colors',
+   252→                    barrier === d ? 'bg-sky-500 text-white' : 'bg-muted/50 hover:bg-accent text-muted-foreground'
+   253→                  )}
+   254→                  onClick={() => setBarrier(barrier === d ? undefined : d)}
+   255→                >
+   256→                  {d}
+   257→                </button>
+   258→              ))}
+   259→            </div>
+   260→          </CardContent>
+   261→        </Card>
+   262→      )}
+   263→
+   264→      {/* ── Multiplier selector ── */}
+   265→      {marketType === 'multiplier' && (
+   266→        <Card>
+   267→          <CardContent className="p-3 space-y-2">
+   268→            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Multiplier</p>
+   269→            <div className="grid grid-cols-4 gap-1">
+   270→              {[2, 5, 10, 20, 50, 100, 250, 500].map(m => (
+   271→                <button
+   272→                  key={m}
+   273→                  type="button"
+   274→                  className={cn(
+   275→                    'py-1.5 rounded text-xs font-bold transition-colors',
+   276→                    multiplier === m ? 'bg-purple-500 text-white' : 'bg-muted/50 hover:bg-accent text-muted-foreground'
+   277→                  )}
+   278→                  onClick={() => setMultiplier(multiplier === m ? undefined : m)}
+   279→                >
+   280→                  x{m}
+   281→                </button>
+   282→              ))}
+   283→            </div>
+   284→          </CardContent>
+   285→        </Card>
+   286→      )}
+   287→
+   288→      {/* ── Stake + Signal Analysis ── */}
+   289→      {isLoading ? (
+   290→        <Card>
+   291→          <CardContent className="p-4 flex items-center justify-center">
+   292→            <div className="animate-pulse flex items-center gap-2">
+   293→              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+   294→              <span className="text-[11px] text-muted-foreground">Analyzing live data...</span>
+   295→            </div>
+   296→          </CardContent>
+   297→        </Card>
+   298→      ) : analysis ? (
+   299→        <Card className="overflow-hidden">
+   300→          {/* Signal Banner */}
+   301→          <div className={cn(
+   302→            'px-3 py-2 flex items-center justify-between',
+   303→            isBuy ? 'bg-emerald-500/15' : 'bg-red-500/15'
+   304→          )}>
+   305→            <div className="flex items-center gap-2">
+   306→              {isBuy
+   307→                ? <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+   308→                : <TrendingDown className="h-3.5 w-3.5 text-red-400" />
+   309→              }
+   310→              <span className={cn('text-xs font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   311→                {SIGNAL_COLORS[analysis.signal].label}
+   312→              </span>
+   313→            </div>
+   314→            <div className="flex items-center gap-1.5">
+   315→              <span className="text-[10px] text-muted-foreground">Conf.</span>
+   316→              <span className="text-xs font-bold">{analysis.confidence.toFixed(1)}%</span>
+   317→            </div>
+   318→          </div>
+   319→
+   320→          <CardContent className="p-3 space-y-3">
+   321→            {/* Entry Price + Last Digit + Probability */}
+   322→            <div className="flex items-center justify-between">
+   323→              <div>
+   324→                <p className="text-[10px] text-muted-foreground">Entry Price</p>
+   325→                <p className="text-lg font-bold font-mono tracking-tight">{displayPrice.toFixed(2)}</p>
+   326→                {livePrice && (
+   327→                  <p className="text-[8px] text-emerald-400">● Live from Deriv</p>
+   328→                )}
+   329→              </div>
+   330→              <div className="text-center">
+   331→                <p className="text-[10px] text-muted-foreground">Last Digit</p>
+   332→                <div className={cn(
+   333→                  'h-10 w-10 rounded-lg flex items-center justify-center text-lg font-bold',
+   334→                  displayDigit % 2 === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+   335→                )}>
+   336→                  {displayDigit}
+   337→                </div>
+   338→              </div>
+   339→              <div className="text-right">
+   340→                <p className="text-[10px] text-muted-foreground">Probability</p>
+   341→                <p className="text-lg font-bold">{analysis.probability.toFixed(1)}%</p>
+   342→              </div>
+   343→            </div>
+   344→
+   345→            <Progress value={analysis.confidence} className="h-1" />
+   346→
+   347→            {/* Stake Input */}
+   348→            <div className="space-y-1.5">
+   349→              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Stake</p>
+   350→              <div className="relative">
+   351→                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+   352→                <Input
+   353→                  type="number"
+   354→                  min={config.minStake}
+   355→                  max={config.maxStake}
+   356→                  step={0.5}
+   357→                  value={stake}
+   358→                  onChange={(e) => setStake(Math.max(config.minStake, parseFloat(e.target.value) || 0))}
+   359→                  className="pl-7 h-9 text-sm font-bold font-mono"
+   360→                />
+   361→              </div>
+   362→              <div className="flex gap-1">
+   363→                {[1, 5, 10, 25, 50, 100].map(s => (
+   364→                  <button
+   365→                    key={s}
+   366→                    type="button"
+   367→                    className={cn(
+   368→                      'flex-1 py-1 rounded text-[10px] font-medium transition-colors',
+   369→                      stake === s ? 'bg-primary text-primary-foreground' : 'bg-muted/50 hover:bg-accent'
+   370→                    )}
+   371→                    onClick={() => setStake(s)}
+   372→                  >
+   373→                    ${s}
+   374→                  </button>
+   375→                ))}
+   376→              </div>
+   377→            </div>
+   378→
+   379→            {/* Payout Display */}
+   380→            <div className={cn(
+   381→              'rounded-lg p-3 border',
+   382→              isBuy ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'
+   383→            )}>
+   384→              <div className="flex items-center justify-between">
+   385→                <div>
+   386→                  <p className="text-[10px] text-muted-foreground">Potential Payout</p>
+   387→                  <p className={cn('text-xl font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   388→                    ${((stake * analysis.returnPercent) / 100 + stake).toFixed(2)}
+   389→                  </p>
+   390→                </div>
+   391→                <div className="text-right">
+   392→                  <p className="text-[10px] text-muted-foreground">Return</p>
+   393→                  <p className={cn('text-lg font-bold', isBuy ? 'text-emerald-400' : 'text-red-400')}>
+   394→                    +{analysis.returnPercent.toFixed(1)}%
+   395→                  </p>
+   396→                  {isBuy ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : <ArrowDownRight className="h-4 w-4 text-red-400" />}
+   397→                </div>
+   398→              </div>
+   399→              <Separator className="my-2" />
+   400→              <div className="grid grid-cols-3 gap-2">
+   401→                <div className="text-center">
+   402→                  <p className="text-[9px] text-muted-foreground">Target</p>
+   403→                  <p className="text-[10px] font-bold text-emerald-400">{analysis.target.toFixed(2)}</p>
+   404→                </div>
+   405→                <div className="text-center">
+   406→                  <p className="text-[9px] text-muted-foreground">Stop Loss</p>
+   407→                  <p className="text-[10px] font-bold text-red-400">{analysis.stopLoss.toFixed(2)}</p>
+   408→                </div>
+   409→                <div className="text-center">
+   410→                  <p className="text-[9px] text-muted-foreground">R:R</p>
+   411→                  <p className="text-[10px] font-bold">{analysis.riskReward.toFixed(1)}:1</p>
+   412→                </div>
+   413→              </div>
+   414→            </div>
+   415→
+   416→            {/* Indicators */}
+   417→            <div className="space-y-1">
+   418→              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Indicators</p>
+   419→              {analysis.indicators.map((ind, i) => (
+   420→                <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+   421→                  <div className="min-w-0">
+   422→                    <p className="text-[10px] font-medium truncate">{ind.name}</p>
+   423→                    <p className="text-[9px] text-muted-foreground">{ind.description}</p>
+   424→                  </div>
+   425→                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+   426→                    <span className="text-[10px] font-bold">{String(ind.value)}</span>
+   427→                    <Badge variant="outline" className={cn('text-[8px] px-1 py-0', SIGNAL_COLORS[ind.signal].text)}>
+   428→                      {SIGNAL_COLORS[ind.signal].label}
+   429→                    </Badge>
+   430→                  </div>
+   431→                </div>
+   432→              ))}
+   433→            </div>
+   434→
+   435→            {/* Add to Accumulator */}
+   436→            <Button
+   437→              className={cn('w-full h-8 text-xs font-medium gap-1.5',
+   438→                isInAccumulator(analysis.symbol)
+   439→                  ? 'bg-emerald-600 hover:bg-emerald-700'
+   440→                  : isBuy ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
+   441→              )}
+   442→              variant="outline"
+   443→              disabled={isInAccumulator(analysis.symbol)}
+   444→              onClick={() => addLeg({
+   445→                id: `${analysis.symbol}-${marketType}-${Date.now()}`,
+   446→                symbol: analysis.symbol,
+   447→                name: ALL_SYMBOLS.find(s => s.symbol === analysis.symbol)?.name || analysis.symbol,
+   448→                marketType,
+   449→                signal: analysis.signal,
+   450→                prediction: selectedPrediction,
+   451→                confidence: analysis.confidence,
+   452→                probability: analysis.probability,
+   453→                odds: 1 + analysis.riskReward * 0.5,
+   454→                stake,
+   455→                payout: parseFloat((stake * analysis.returnPercent / 100 + stake).toFixed(2)),
+   456→                entryPrice: displayPrice,
+   457→                target: analysis.target,
+   458→                barrier: analysis.barrier,
+   459→                duration,
+   460→                timeframe: '15m',
+   461→              })}
+   462→            >
+   463→              <Layers className="h-3 w-3" />
+   464→              {isInAccumulator(analysis.symbol) ? '✓ In Accumulator' : 'Add to Accumulator'}
+   465→            </Button>
+   466→          </CardContent>
+   467→        </Card>
+   468→      ) : null}
+   469→
+   470→      {/* ── Market Scan ── */}
+   471→      <Card>
+   472→        <CardContent className="p-3 space-y-2">
+   473→          <div className="flex items-center justify-between">
+   474→            <div className="flex items-center gap-2">
+   475→              <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+   476→              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Market Scan</span>
+   477→            </div>
+   478→            <div className="flex items-center gap-1">
+   479→              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   480→                <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue /></SelectTrigger>
+   481→                <SelectContent>
+   482→                  {SYMBOL_CATEGORIES.map(cat => (
+   483→                    <SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.label}</SelectItem>
+   484→                  ))}
+   485→                </SelectContent>
+   486→              </Select>
+   487→              <Button variant="ghost" size="sm" className={cn('h-6 px-2 text-[9px]', sortBy === 'confidence' && 'bg-accent')} onClick={() => setSortBy('confidence')}>Conf</Button>
+   488→              <Button variant="ghost" size="sm" className={cn('h-6 px-2 text-[9px]', sortBy === 'returnPercent' && 'bg-accent')} onClick={() => setSortBy('returnPercent')}>Return</Button>
+   489→            </div>
+   490→          </div>
+   491→          {summary && (
+   492→            <div className="flex gap-2 text-[9px] text-muted-foreground">
+   493→              <span className={cn(summary.buySignals > summary.sellSignals && 'text-emerald-400 font-medium')}>{summary.buySignals} buy</span>
+   494→              <span className="text-border">|</span>
+   495→              <span className={cn(summary.sellSignals > summary.buySignals && 'text-red-400 font-medium')}>{summary.sellSignals} sell</span>
+   496→              <span className="text-border">|</span>
+   497→              <span>{summary.neutralSignals} neutral</span>
+   498→            </div>
+   499→          )}
+   500→          <ScrollArea className="max-h-[280px]">
+   501→            <div className="space-y-0.5">
+   502→              {batchAnalyses.map((a: AnalysisSignal) => {
+   503→                const sym = ALL_SYMBOLS.find(s => s.symbol === a.symbol)
+   504→                const inAcc = isInAccumulator(a.symbol)
+   505→                const aIsBuy = a.signal === 'buy' || a.signal === 'strong_buy'
+   506→                const symLivePrice = useTickStore.getState().livePrices[a.symbol]
+   507→
+   508→                return (
+   509→                  <div key={a.symbol} className="flex items-center justify-between p-2 rounded-md hover:bg-accent/30 transition-colors group">
+   510→                    <div className="flex items-center gap-2 min-w-0">
+   511→                      <div className={cn(
+   512→                        'h-1.5 w-1.5 rounded-full shrink-0',
+   513→                        aIsBuy ? 'bg-emerald-400' : a.signal === 'neutral' ? 'bg-gray-400' : 'bg-red-400'
+   514→                      )} />
+   515→                      <div className="min-w-0">
+   516→                        <p className="text-[11px] font-medium truncate">{sym?.name || a.symbol.split(':').pop()}</p>
+   517→                        <div className="flex items-center gap-1.5">
+   518→                          <span className="text-[9px] text-muted-foreground">{sym?.exchange}</span>
+   519→                          {symLivePrice ? (
+   520→                            <span className="text-[9px] font-mono text-emerald-400">
+   521→                              D{symLivePrice.lastDigit} ● {symLivePrice.price >= 1 ? symLivePrice.price.toFixed(2) : symLivePrice.price.toFixed(6)}
+   522→                            </span>
+   523→                          ) : (
+   524→                            <span className="text-[9px] text-muted-foreground">D{a.lastDigit}</span>
+   525→                          )}
+   526→                        </div>
+   527→                      </div>
+   528→                    </div>
+   529→                    <div className="flex items-center gap-2 shrink-0">
+   530→                      <span className={cn('text-[10px] font-bold w-8 text-right', aIsBuy ? 'text-emerald-400' : 'text-red-400')}>
+   531→                        {a.returnPercent.toFixed(0)}%
+   532→                      </span>
+   533→                      <span className="text-[9px] text-muted-foreground w-6 text-right">{a.confidence.toFixed(0)}%</span>
+   534→                      <Button
+   535→                        size="sm"
+   536→                        variant={inAcc ? 'default' : 'outline'}
+   537→                        className={cn('h-5 text-[8px] px-1.5', inAcc && 'bg-emerald-600 hover:bg-emerald-700')}
+   538→                        disabled={inAcc}
+   539→                        onClick={() => addLeg({
+   540→                          id: `${a.symbol}-${marketType}-${Date.now()}`,
+   541→                          symbol: a.symbol,
+   542→                          name: sym?.name || a.symbol,
+   543→                          marketType,
+   544→                          signal: a.signal,
+   545→                          prediction: selectedPrediction,
+   546→                          confidence: a.confidence,
+   547→                          probability: a.probability,
+   548→                          odds: 1 + a.riskReward * 0.5,
+   549→                          stake,
+   550→                          payout: parseFloat((stake * a.returnPercent / 100 + stake).toFixed(2)),
+   551→                          entryPrice: a.entryPrice,
+   552→                          target: a.target,
+   553→                          duration,
+   554→                          timeframe: '15m',
+   555→                        })}
+   556→                      >
+   557→                        {inAcc ? '✓' : '+'}
+   558→                      </Button>
+   559→                    </div>
+   560→                  </div>
+   561→                )
+   562→              })}
+   563→            </div>
+   564→          </ScrollArea>
+   565→        </CardContent>
+   566→      </Card>
+   567→    </div>
+   568→  )
+   569→}
+   570→
